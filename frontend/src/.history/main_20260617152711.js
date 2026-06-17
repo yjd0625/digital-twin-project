@@ -10,16 +10,15 @@ const { scene, camera, renderer, labelRenderer, controls } = createScene(contain
 // ======================== 左下角固定坐标轴 ========================
 const axisScene = new THREE.Scene();
 const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
-const axisDist = 3;
-axisCam.position.set(axisDist, axisDist * 0.7, axisDist);
+axisCam.position.set(3, 2, 5);
 axisCam.lookAt(0, 0, 0);
 axisScene.add(new THREE.AxesHelper(1.5));
 axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
 
-// X / Y / Z 文字标签（Sprite）
+// 给坐标轴箭头加上 X / Y / Z 文字标签（Sprite 会随相机旋转）
 function makeLabel(text, color) {
   const c = document.createElement("canvas");
-  c.width = 64; c.height = 64;
+  c.width = 128; c.height = 128;
   const ctx = c.getContext("2d");
   ctx.fillStyle = color;
   ctx.font = "Bold 44px Arial";
@@ -28,15 +27,15 @@ function makeLabel(text, color) {
   ctx.shadowColor = "rgba(0,0,0,0.9)";
   ctx.shadowBlur = 6;
   ctx.fillText(text, 32, 32);
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false })
-  );
-  sprite.scale.set(0.6, 0.6, 1);
-  return sprite;
+  const t = new THREE.CanvasTexture(c);
+  const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false });
+  const s = new THREE.Sprite(m);
+  s.scale.set(0.6, 0.6, 1);
+  return s;
 }
-const xLbl = makeLabel("X", "#ff4444"); xLbl.position.set(1.7, 0, 0);  axisScene.add(xLbl);
-const yLbl = makeLabel("Y", "#44ff44"); yLbl.position.set(0, 1.7, 0);  axisScene.add(yLbl);
-const zLbl = makeLabel("Z", "#4444ff"); zLbl.position.set(0, 0, 1.7);  axisScene.add(zLbl);
+const xLbl = makeLabel("X", "#ff4444"); xLbl.position.set(1, 0, 0);  axisScene.add(xLbl);
+const yLbl = makeLabel("Y", "#44ff44"); yLbl.position.set(0, 1, 0);  axisScene.add(yLbl);
+const zLbl = makeLabel("Z", "#4444ff"); zLbl.position.set(0, 0, 1);  axisScene.add(zLbl);
 
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 axisRenderer.setPixelRatio(window.devicePixelRatio);
@@ -49,22 +48,21 @@ axisRenderer.domElement.style.zIndex = "1";
 axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
-// ======================== 占位对象（不可见，仅用于 DataHandler 引用）=======================
-let dataDevice = createDefaultDevice(scene, {});  // 不传 label，不创建标签
+// ======================== 占位对象（不可见，仅用于 DataHandler 引用） ========================
+let dataDevice = createDefaultDevice(scene, { label: "" });
 dataDevice.visible = false;
 const dataHandler = new DataHandler({ cube: dataDevice });
 
 // ======================== 加载真实 3D 模型 ========================
-// rotateX: -PI/2 修复 Z-up → Y-up（CAD 导出 vs Three.js 默认）
+// rotateX: -PI/2 修复 Z-up（CAD 导出）→ Y-up（Three.js 默认）
 loadGLTFModel(scene, "/models/assembleStation.glb", {
   label: "\u7ec4\u88c5\u5de5\u4f4d",
   rotateX: -Math.PI / 2,
-  // position: [0, 0, 0],     // <-- 模型坐标在此修改
-  // labelOffset: 2.5,        // <-- 标签高度在此修改
 })
   .then((model) => {
     dataHandler.objects.cube = model;
 
+    // 根据模型尺寸自动调整相机距离
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
@@ -72,6 +70,7 @@ loadGLTFModel(scene, "/models/assembleStation.glb", {
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.set(0, 0, 0);
     controls.update();
+
     console.log("3D model loaded, maxDim=", maxDim);
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
@@ -115,14 +114,11 @@ window.addEventListener("resize", () => {
 });
 
 // ======================== 主渲染循环 ========================
-const _offset = new THREE.Vector3();  // 复用变量，避免每帧 new
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // 坐标轴只跟随相机旋转，不跟随平移（右键拖动时轴不动）
-  _offset.copy(camera.position).sub(controls.target).normalize().multiplyScalar(axisDist);
-  axisCam.position.copy(controls.target).add(_offset);
+  axisCam.position.copy(camera.position).normalize().multiplyScalar(3);
   axisCam.quaternion.copy(camera.quaternion);
 
   renderer.render(scene, camera);

@@ -26,21 +26,23 @@ export function createDefaultDevice(scene, options = {}) {
   mesh.position.set(...position);
   scene.add(mesh);
 
-  // 标签
-  const div = document.createElement('div');
-  div.textContent = label;
-  div.style.color = 'white';
-  div.style.fontFamily = 'Arial, sans-serif';
-  div.style.fontSize = '16px';
-  div.style.fontWeight = 'bold';
-  div.style.textShadow = '1px 1px 3px rgba(0,0,0,0.8)';
-  div.style.background = 'rgba(0,0,0,0.5)';
-  div.style.padding = '4px 12px';
-  div.style.borderRadius = '12px';
-  div.style.border = '1px solid #00aaff';
-  const labelObj = new CSS2DObject(div);
-  labelObj.position.set(0, 0.8, 0);
-  mesh.add(labelObj);
+  // 标签（label 为空或未传则不创建）
+  if (label) {
+    const div = document.createElement("div");
+    div.textContent = label;
+    div.style.color = "white";
+    div.style.fontFamily = "Arial, sans-serif";
+    div.style.fontSize = "16px";
+    div.style.fontWeight = "bold";
+    div.style.textShadow = "1px 1px 3px rgba(0,0,0,0.8)";
+    div.style.background = "rgba(0,0,0,0.5)";
+    div.style.padding = "4px 12px";
+    div.style.borderRadius = "12px";
+    div.style.border = "1px solid #00aaff";
+    const labelObj = new CSS2DObject(div);
+    labelObj.position.set(0, 0.8, 0);
+    mesh.add(labelObj);
+  }
 
   return mesh;
 }
@@ -91,7 +93,7 @@ export async function loadGLTFModel(scene, url, options = {}) {
     div.style.borderRadius = "12px";
     div.style.border = "1px solid #00aaff";
     const labelObj = new CSS2DObject(div);
-    labelObj.position.set(0, size.y / 2 + 0.5, 0);
+    labelObj.position.set(0, options.labelOffset ?? size.y / 2 + 0.5, 0);
     model.add(labelObj);
   }
 
