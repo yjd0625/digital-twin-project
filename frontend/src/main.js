@@ -7,17 +7,47 @@ import { setupUI } from "./ui.js";
 const container = document.body;
 const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
 
+// --- corner coordinate axis (fixed bottom-left) ---
+const axisScene = new THREE.Scene();
+const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
+axisCam.position.set(3, 2, 5);
+axisCam.lookAt(0, 0, 0);
+axisScene.add(new THREE.AxesHelper(1.5));
+axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
+
+const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+axisRenderer.setPixelRatio(window.devicePixelRatio);
+axisRenderer.setSize(130, 130);
+axisRenderer.domElement.style.position = "absolute";
+axisRenderer.domElement.style.bottom = "15px";
+axisRenderer.domElement.style.left = "15px";
+axisRenderer.domElement.style.pointerEvents = "none";
+axisRenderer.domElement.style.zIndex = "1";
+axisRenderer.domElement.style.borderRadius = "6px";
+document.body.appendChild(axisRenderer.domElement);
+
 const device = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
 const dataHandler = new DataHandler({ cube: device });
 
+// --- load real 3D model ---
 loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5\u4f4d" })
   .then((model) => {
     scene.remove(device);
     dataHandler.objects.cube = model;
-    console.log("3D model loaded: assembleStation.glb");
+
+    // auto-fit camera to model
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = Math.max(maxDim * 1.2, 2);
+    camera.position.set(dist * 0.6, dist * 0.6, dist);
+    controls.target.set(0, 0, 0);
+    controls.update();
+    console.log("3D model loaded, camera auto-fitted");
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
 
+// --- WebSocket ---
 let ws;
 function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
@@ -59,5 +89,6 @@ function animate() {
   controls.update();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
+  axisRenderer.render(axisScene, axisCam);  // sync axis indicator
 }
 animate();
