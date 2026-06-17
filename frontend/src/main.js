@@ -120,9 +120,7 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // 坐标轴只跟随相机旋转，不跟随平移（右键拖动时轴不动）
-  _offset.copy(camera.position).sub(controls.target).normalize().multiplyScalar(axisDist);
-  axisCam.position.copy(controls.target).add(_offset);
+  // \u53ea\u540c\u6b65\u65cb\u8f6c\uff0c\u4f4d\u7f6e\u56fa\u5b9a\uff08\u53f3\u952e\u5e73\u79fb\u65f6\u8f74\u4e0d\u4f1a\u79fb\u52a8\uff09\r\n  _offset\.copy\(camera\.position\)\.normalize\(\)\.multiplyScalar\(axisDist\);\r\n  axisCam\.position\.copy\(_offset\);
   axisCam.quaternion.copy(camera.quaternion);
 
   renderer.render(scene, camera);
@@ -130,4 +128,5 @@ function animate() {
   axisRenderer.render(axisScene, axisCam);
 }
 animate();
+
 
