@@ -7,12 +7,13 @@ import { setupUI } from "./ui.js";
 const container = document.body;
 const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
 
-// --- corner coordinate axis (rotates with main camera) ---
+// ======================== 左下角固定坐标轴 ========================
+// 独立的场景 + 渲染器，跟随主相机旋转
 const axisScene = new THREE.Scene();
 const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
 axisCam.position.set(3, 2, 5);
 axisCam.lookAt(0, 0, 0);
-axisScene.add(new THREE.AxesHelper(1.5));
+axisScene.add(new THREE.AxesHelper(1.5));              // 红X 绿Y 蓝Z
 axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
 
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -26,25 +27,27 @@ axisRenderer.domElement.style.zIndex = "1";
 axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
-// --- data-driven cube (replaced by model when loaded) ---
+// ======================== 数据驱动的设备对象 ========================
+// 模型加载前用方块占位，加载后替换为真实模型
 let dataDevice = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
 const dataHandler = new DataHandler({ cube: dataDevice });
 
-// --- reference cube (always visible for size comparison) ---
+// ======================== 参考方块（始终可见，辅助对比大小） ========================
 const refCube = createDefaultDevice(scene, {
   label: "1m\u00b3 \u53c2\u8003",
   position: [2.5, 0, 0],
   color: 0xff8800,
-  emissive: 0x442200,
+  emissive: 0x662200,
 });
 
-// --- load real 3D model ---
+// ======================== 加载真实 3D 模型 ========================
 loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5\u4f4d" })
   .then((model) => {
-    scene.remove(dataDevice);
+    // 隐藏方块，替换数据指向
+    dataDevice.visible = false;
     dataHandler.objects.cube = model;
 
-    // auto-fit camera to model
+    // 根据模型尺寸自动调整相机距离
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
@@ -52,11 +55,12 @@ loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.set(0, 0, 0);
     controls.update();
-    console.log("3D model loaded, camera auto-fitted");
+
+    console.log("3D model loaded: assembleStation.glb, dist=", dist);
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
 
-// --- WebSocket ---
+// ======================== WebSocket 数据通信 ========================
 let ws;
 function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
@@ -67,7 +71,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      dataHandler.process(data);
+      dataHandler.process(data);  // 驱动 3D 对象状态变化
       const raw = data.value || data.raw || JSON.stringify(data);
       ui.updateInfo("\u6700\u65b0\u6570\u636e: " + raw);
     } catch (e) { console.error(e); }
@@ -86,6 +90,7 @@ function sendCommand(msg) {
 const ui = setupUI(controls, sendCommand);
 connectWebSocket();
 
+// ======================== 窗口尺寸自适应 ========================
 window.addEventListener("resize", () => {
   const w = container.clientWidth || window.innerWidth;
   const h = container.clientHeight || window.innerHeight;
@@ -93,16 +98,17 @@ window.addEventListener("resize", () => {
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
 });
 
+// ======================== 主渲染循环 ========================
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // sync corner axis camera with main camera rotation
+  // 左下角坐标轴同步主相机旋转
   axisCam.position.copy(camera.position).normalize().multiplyScalar(3);
   axisCam.quaternion.copy(camera.quaternion);
 
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
-  axisRenderer.render(axisScene, axisCam);
+  renderer.render(scene, camera);        // 主场景
+  labelRenderer.render(scene, camera);    // 浮动标签
+  axisRenderer.render(axisScene, axisCam); // 左下角坐标轴
 }
 animate();
