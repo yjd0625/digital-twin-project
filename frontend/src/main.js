@@ -8,13 +8,34 @@ const container = document.body;
 const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
 
 // ======================== 左下角固定坐标轴 ========================
-// 独立的场景 + 渲染器，跟随主相机旋转
 const axisScene = new THREE.Scene();
 const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
 axisCam.position.set(3, 2, 5);
 axisCam.lookAt(0, 0, 0);
 axisScene.add(new THREE.AxesHelper(1.5));
 axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
+
+// 给坐标轴箭头加上 X / Y / Z 文字标签（Sprite 会随相机旋转）
+function makeLabel(text, color) {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 64;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = color;
+  ctx.font = "Bold 44px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,0.9)";
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, 32, 32);
+  const t = new THREE.CanvasTexture(c);
+  const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false });
+  const s = new THREE.Sprite(m);
+  s.scale.set(0.6, 0.6, 1);
+  return s;
+}
+const xLbl = makeLabel("X", "#ff4444"); xLbl.position.set(1.7, 0, 0);  axisScene.add(xLbl);
+const yLbl = makeLabel("Y", "#44ff44"); yLbl.position.set(0, 1.7, 0);  axisScene.add(yLbl);
+const zLbl = makeLabel("Z", "#4444ff"); zLbl.position.set(0, 0, 1.7);  axisScene.add(zLbl);
 
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 axisRenderer.setPixelRatio(window.devicePixelRatio);
@@ -28,15 +49,17 @@ axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
 // ======================== 占位对象（不可见，仅用于 DataHandler 引用） ========================
-// 模型加载前需要一个 JS 引用让 DataHandler 正常工作
-let dataDevice = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
-dataDevice.visible = false;  // 隐藏，由后续加载的真实模型替代
+let dataDevice = createDefaultDevice(scene, { label: "" });
+dataDevice.visible = false;
 const dataHandler = new DataHandler({ cube: dataDevice });
 
 // ======================== 加载真实 3D 模型 ========================
-loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5\u4f4d" })
+// rotateX: -PI/2 修复 Z-up（CAD 导出）→ Y-up（Three.js 默认）
+loadGLTFModel(scene, "/models/assembleStation.glb", {
+  label: "\u7ec4\u88c5\u5de5\u4f4d",
+  rotateX: -Math.PI / 2,
+})
   .then((model) => {
-    // 将数据驱动指向从占位方块切换到真实模型
     dataHandler.objects.cube = model;
 
     // 根据模型尺寸自动调整相机距离
@@ -48,7 +71,7 @@ loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5
     controls.target.set(0, 0, 0);
     controls.update();
 
-    console.log("3D model loaded: assembleStation.glb, maxDim=", maxDim);
+    console.log("3D model loaded, maxDim=", maxDim);
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
 
@@ -95,7 +118,6 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // 左下角坐标轴同步主相机旋转
   axisCam.position.copy(camera.position).normalize().multiplyScalar(3);
   axisCam.quaternion.copy(camera.quaternion);
 
