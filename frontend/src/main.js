@@ -14,7 +14,7 @@ const axisDist = 3;
 axisCam.position.set(axisDist, axisDist * 0.7, axisDist);
 axisCam.lookAt(0, 0, 0);
 axisScene.add(new THREE.AxesHelper(1.5));
-axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
+// axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
 
 // X / Y / Z 文字标签（Sprite）
 function makeLabel(text, color) {
@@ -22,7 +22,7 @@ function makeLabel(text, color) {
   c.width = 64; c.height = 64;
   const ctx = c.getContext("2d");
   ctx.fillStyle = color;
-  ctx.font = "Bold 44px Arial";
+  ctx.font = "Bold 32px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0,0,0,0.9)";
@@ -34,9 +34,9 @@ function makeLabel(text, color) {
   sprite.scale.set(0.6, 0.6, 1);
   return sprite;
 }
-const xLbl = makeLabel("X", "#ff4444"); xLbl.position.set(1.7, 0, 0);  axisScene.add(xLbl);
-const yLbl = makeLabel("Y", "#44ff44"); yLbl.position.set(0, 1.7, 0);  axisScene.add(yLbl);
-const zLbl = makeLabel("Z", "#4444ff"); zLbl.position.set(0, 0, 1.7);  axisScene.add(zLbl);
+const xLbl = makeLabel("X", "#ff4444"); xLbl.position.set(0.9, 0, 0);  axisScene.add(xLbl);
+const yLbl = makeLabel("Y", "#44ff44"); yLbl.position.set(0, 0.9, 0);  axisScene.add(yLbl);
+const zLbl = makeLabel("Z", "#4444ff"); zLbl.position.set(0, 0, 0.9);  axisScene.add(zLbl);
 
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 axisRenderer.setPixelRatio(window.devicePixelRatio);
@@ -59,8 +59,8 @@ const dataHandler = new DataHandler({ cube: dataDevice });
 loadGLTFModel(scene, "/models/assembleStation.glb", {
   label: "\u7ec4\u88c5\u5de5\u4f4d",
   rotateX: -Math.PI / 2,
-  // position: [0, 0, 0],     // <-- 模型坐标在此修改
-  // labelOffset: 2.5,        // <-- 标签高度在此修改
+  position: [0, 0, 0],     // <-- 模型坐标在此修改
+  labelOffset: 3,        // <-- 标签高度在此修改
 })
   .then((model) => {
     dataHandler.objects.cube = model;

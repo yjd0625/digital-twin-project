@@ -53,7 +53,7 @@ export function createScene(container) {
 
   // --- 地面网格（帮助判断空间位置） ---
   const grid = new THREE.GridHelper(10, 20, 0x88aaff, 0x335588);
-  grid.position.y = -0.5;
+  grid.position.y = 0;
   scene.add(grid);
 
   return { scene, camera, renderer, labelRenderer, controls };
