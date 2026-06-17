@@ -1,0 +1,18 @@
+{
+  "name": "digital-twin-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PlantSimulation 数字孪生 3D 可视化前端",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

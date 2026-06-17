@@ -1,0 +1,20 @@
+(*
+  描述: 接收并处理来自 Python 后端的指令
+  在 Socket 的 OnReceive 事件中调用
+*)
+
+var cmd : string
+cmd := soc.ReadString
+
+if cmd = "START" then
+    eventController.start
+    print "Command received: START"
+elseif cmd = "STOP" then
+    eventController.stop
+    print "Command received: STOP"
+elseif strStart( cmd, "SPEED" ) then
+    eventController.speed := strToNum( strSplit( cmd, ":" )[ 2, 1 ] )
+    print "Command received: " + cmd
+else
+    print "Unknown command: " + cmd
+end
