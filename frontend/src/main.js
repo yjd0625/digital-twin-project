@@ -50,7 +50,7 @@ axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
 // ======================== 占位对象（不可见，仅用于 DataHandler 引用）=======================
-let dataDevice = createDefaultDevice(scene, {});  // 不传 label，不创建标签
+let dataDevice = createDefaultDevice(scene, { label: "" });  // 不传 label，不创建标签
 dataDevice.visible = false;
 const dataHandler = new DataHandler({ cube: dataDevice });
 
@@ -130,3 +130,4 @@ function animate() {
   axisRenderer.render(axisScene, axisCam);
 }
 animate();
+
