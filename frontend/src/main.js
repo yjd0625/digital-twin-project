@@ -3,6 +3,7 @@ import { createScene } from "./scene.js";
 import { createDefaultDevice, loadGLTFModel } from "./models.js";
 import { DataHandler } from "./data_handler.js";
 import { setupUI } from "./ui.js";
+import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
 const container = document.body;
 const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
@@ -57,34 +58,32 @@ const dataHandler = new DataHandler({ cube: dataDevice });
 // ======================== 加载真实 3D 模型 ========================
 // rotateX: -PI/2 修复 Z-up → Y-up（CAD 导出 vs Three.js 默认）
     // ==== load all 3D models ====
+    const allModelInstances = [];
     async function loadAllModels() {
       const configs = [
         { url: "/models/assembleStation.glb", label: "\u7ec4\u88c5\u5de5\u4f4d", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
         { url: "/models/telescopicFork.glb", label: "\u4f38\u7f29\u53c9", count: 1, positions: [[-4,0,0]] },
         { url: "/models/weldHangingRobot.glb", label: "\u710a\u63a5\u673a\u5668\u4eba", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
       ];
-      const allModels = [];
+      function makeLabel(text) {
+        const d = document.createElement("div");
+        d.textContent = text;
+        Object.assign(d.style, { color: "white", fontFamily: "Arial,sans-serif", fontSize: "13px", fontWeight: "bold",
+          textShadow: "1px 1px 3px rgba(0,0,0,0.8)", background: "rgba(0,0,0,0.5)", padding: "2px 8px", borderRadius: "10px", border: "1px solid #00aaff" });
+        return new CSS2DObject(d);
+      }
       for (const cfg of configs) {
-        const first = await loadGLTFModel(scene, cfg.url, { label: cfg.label, rotateX: -Math.PI / 2, position: cfg.positions[0], labelOffset: 3 });
-        allModels.push(first);
-        const basePos = first.position.clone();
-        for (let i = 1; i < cfg.count; i++) {
-          const clone = first.clone();
-          for (let j = clone.children.length - 1; j >= 0; j--)
-            if (clone.children[j].isCSS2DObject) clone.remove(clone.children[j]);
-          clone.position.set(
-            basePos.x + cfg.positions[i][0] - cfg.positions[0][0],
-            basePos.y,
-            basePos.z + cfg.positions[i][2] - cfg.positions[0][2],
-          );
-          scene.add(clone);
+        for (let i = 0; i < cfg.count; i++) {
+          const lbl = (cfg.count > 1 ? cfg.label + " #" + (i + 1) : cfg.label);
+          const model = await loadGLTFModel(scene, cfg.url, { label: lbl, rotateX: -Math.PI / 2, position: cfg.positions[i], labelOffset: 3 });
+          allModelInstances.push(model);
         }
       }
-      return allModels[0];
+      return allModelInstances;
     }
     loadAllModels()
-      .then((dataModel) => {
-        dataHandler.objects.cube = dataModel;
+      .then((instances) => {
+        dataHandler.objects.cube = instances[0];
         const allBox = new THREE.Box3().setFromObject(scene);
         const size = allBox.getSize(new THREE.Vector3());
         const center = allBox.getCenter(new THREE.Vector3());
@@ -93,9 +92,23 @@ const dataHandler = new DataHandler({ cube: dataDevice });
         camera.position.set(dist * 0.6, dist * 0.6, dist);
         controls.target.copy(center);
         controls.update();
-        console.log("All models loaded, scene size:", maxDim);
+        console.log("All models loaded:", instances.length);
       })
       .catch((e) => console.warn("Model loading failed:", e));
+
+    // apply data to all model instances
+    function applyDataToModels(data) {
+      const raw = data.value || data.raw || JSON.stringify(data);
+      const val = raw.length / 10;
+      const hue = ((raw.length * 10) % 360) / 360;
+      allModelInstances.forEach(function(m) {
+        m.rotation.x = val;
+        m.rotation.y = val * 0.5;
+        m.traverse(function(ch) { if (ch.isMesh && ch.material) ch.material.color.setHSL(hue, 0.8, 0.5); });
+      });
+      ui.updateInfo("\u6700\u65b0\u6570\u636e: " + raw);
+    }
+
 
 // ======================== 模型选择与移动 ========================
 const _raycaster = new THREE.Raycaster();
@@ -125,17 +138,18 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
 renderer.domElement.addEventListener("pointerup", (e) => {
   const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
   if (Math.sqrt(dx * dx + dy * dy) > 5) return;
-  const target = dataHandler.objects.cube;
-  if (!target) return;
+  if (!allModelInstances.length) return;
   const rect = renderer.domElement.getBoundingClientRect();
   _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   _raycaster.setFromCamera(_mouse, camera);
-  if (_raycaster.intersectObject(target, true).length > 0) {
-    selectObject(target);
-  } else {
-    deselectObject();
+  let hit = false;
+  for (const m of allModelInstances) {
+    if (_raycaster.intersectObject(m, true).length > 0) {
+      selectObject(m); hit = true; break;
+    }
   }
+  if (!hit) deselectObject();
 });
 document.addEventListener("keydown", (e) => {
   if (!selectedObject) return;
@@ -183,9 +197,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      dataHandler.process(data);
-      const raw = data.value || data.raw || JSON.stringify(data);
-      ui.updateInfo("\u6700\u65b0\u6570\u636e: " + raw);
+      applyDataToModels(data);
     } catch (e) { console.error(e); }
   };
   ws.onclose = () => {
@@ -226,6 +238,7 @@ function animate() {
   axisRenderer.render(axisScene, axisCam);
 }
 animate();
+
 
 
 
