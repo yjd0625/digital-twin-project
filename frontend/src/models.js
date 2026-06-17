@@ -46,14 +46,42 @@ export function createDefaultDevice(scene, options = {}) {
 }
 
 /**
- * 通过 GLTF/GLB 文件加载模型（占位，需要时取消注释）
+ * 通过 GLTF/GLB 文件加载模型，自动缩放并居中
+ * @param {THREE.Scene} scene
+ * @param {string} url   模型 URL（如 /models/assembleStation.glb）
+ * @param {object} options
+ * @param {number[]} options.position  平移位置
+ * @param {number}  options.scale      缩放倍率（默认自适应）
+ * @param {string}  options.label      设备标签
+ * @returns {Promise<THREE.Group>}
  */
-// export async function loadGLTFModel(scene, url, position = [0, 0, 0]) {
-//   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-//   const loader = new GLTFLoader();
-//   const gltf = await loader.loadAsync(url);
-//   const model = gltf.scene;
-//   model.position.set(...position);
-//   scene.add(model);
-//   return model;
-// }
+export async function loadGLTFModel(scene, url, options = {}) {
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader();
+  const gltf = await loader.loadAsync(url);
+  const model = gltf.scene;
+
+  // 自动居中
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  // 默认缩放到 2 单位大小，或使用用户指定的 scale
+  const targetScale = options.scale ?? (maxDim > 0 ? 2 / maxDim : 1);
+  model.scale.set(targetScale, targetScale, targetScale);
+
+  const pos = options.position ?? [0, 0, 0];
+  model.position.set(pos[0] - center.x * targetScale, pos[1] - center.y * targetScale, pos[2] - center.z * targetScale);
+
+  // 启用阴影
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  scene.add(model);
+  return model;
+}

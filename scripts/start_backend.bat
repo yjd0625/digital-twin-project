@@ -1,9 +1,13 @@
 @echo off
-set "ROOT=%~dp0.."
-echo Starting backend with DT environment (conda run)...
-conda run --cwd "%ROOT%\backend" -n DT python -m src.main
-if %errorlevel% neq 0 (
-    echo.
-    echo Backend exited with code %errorlevel%.
-    pause
-)
+cd /d "%~dp0..\backend"
+echo Starting PlantSimulation Digital Twin Backend...
+echo.
+echo WebSocket  : ws://localhost:8765
+echo PlantSim   : 127.0.0.1:30000
+echo.
+echo Press Ctrl+C to stop
+echo ========================================
+"E:\Miniconda\miniconda3\envs\DT\python.exe" -m src.main
+echo.
+echo Backend process exited.
+pause
