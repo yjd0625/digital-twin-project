@@ -13,7 +13,7 @@ const axisScene = new THREE.Scene();
 const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
 axisCam.position.set(3, 2, 5);
 axisCam.lookAt(0, 0, 0);
-axisScene.add(new THREE.AxesHelper(1.5));              // 红X 绿Y 蓝Z
+axisScene.add(new THREE.AxesHelper(1.5));
 axisScene.add(new THREE.GridHelper(3, 3, 0x888888, 0x444444));
 
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -27,24 +27,16 @@ axisRenderer.domElement.style.zIndex = "1";
 axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
-// ======================== 数据驱动的设备对象 ========================
-// 模型加载前用方块占位，加载后替换为真实模型
+// ======================== 占位对象（不可见，仅用于 DataHandler 引用） ========================
+// 模型加载前需要一个 JS 引用让 DataHandler 正常工作
 let dataDevice = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
+dataDevice.visible = false;  // 隐藏，由后续加载的真实模型替代
 const dataHandler = new DataHandler({ cube: dataDevice });
-
-// ======================== 参考方块（始终可见，辅助对比大小） ========================
-const refCube = createDefaultDevice(scene, {
-  label: "1m\u00b3 \u53c2\u8003",
-  position: [2.5, 0, 0],
-  color: 0xff8800,
-  emissive: 0x662200,
-});
 
 // ======================== 加载真实 3D 模型 ========================
 loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5\u4f4d" })
   .then((model) => {
-    // 隐藏方块，替换数据指向
-    dataDevice.visible = false;
+    // 将数据驱动指向从占位方块切换到真实模型
     dataHandler.objects.cube = model;
 
     // 根据模型尺寸自动调整相机距离
@@ -56,7 +48,7 @@ loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5
     controls.target.set(0, 0, 0);
     controls.update();
 
-    console.log("3D model loaded: assembleStation.glb, dist=", dist);
+    console.log("3D model loaded: assembleStation.glb, maxDim=", maxDim);
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
 
@@ -71,7 +63,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      dataHandler.process(data);  // 驱动 3D 对象状态变化
+      dataHandler.process(data);
       const raw = data.value || data.raw || JSON.stringify(data);
       ui.updateInfo("\u6700\u65b0\u6570\u636e: " + raw);
     } catch (e) { console.error(e); }
@@ -107,8 +99,8 @@ function animate() {
   axisCam.position.copy(camera.position).normalize().multiplyScalar(3);
   axisCam.quaternion.copy(camera.quaternion);
 
-  renderer.render(scene, camera);        // 主场景
-  labelRenderer.render(scene, camera);    // 浮动标签
-  axisRenderer.render(axisScene, axisCam); // 左下角坐标轴
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  axisRenderer.render(axisScene, axisCam);
 }
 animate();
