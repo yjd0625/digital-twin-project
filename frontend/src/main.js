@@ -56,25 +56,46 @@ const dataHandler = new DataHandler({ cube: dataDevice });
 
 // ======================== 加载真实 3D 模型 ========================
 // rotateX: -PI/2 修复 Z-up → Y-up（CAD 导出 vs Three.js 默认）
-loadGLTFModel(scene, "/models/assembleStation.glb", {
-  label: "\u7ec4\u88c5\u5de5\u4f4d",
-  rotateX: -Math.PI / 2,
-  position: [0, 0, 0],     // <-- 模型坐标在此修改
-  labelOffset: 3,        // <-- 标签高度在此修改
-})
-  .then((model) => {
-    dataHandler.objects.cube = model;
-
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = Math.max(maxDim * 1.5, 3);
-    camera.position.set(dist * 0.6, dist * 0.6, dist);
-    controls.target.set(0, 0, 0);
-    controls.update();
-    console.log("3D model loaded, maxDim=", maxDim);
-  })
-  .catch((e) => console.warn("Model load failed, keeping cube:", e));
+    // ==== load all 3D models ====
+    async function loadAllModels() {
+      const configs = [
+        { url: "/models/assembleStation.glb", label: "\u7ec4\u88c5\u5de5\u4f4d", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
+        { url: "/models/telescopicFork.glb", label: "\u4f38\u7f29\u53c9", count: 1, positions: [[-4,0,0]] },
+        { url: "/models/weldHangingRobot.glb", label: "\u710a\u63a5\u673a\u5668\u4eba", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
+      ];
+      const allModels = [];
+      for (const cfg of configs) {
+        const first = await loadGLTFModel(scene, cfg.url, { label: cfg.label, rotateX: -Math.PI / 2, position: cfg.positions[0], labelOffset: 3 });
+        allModels.push(first);
+        const basePos = first.position.clone();
+        for (let i = 1; i < cfg.count; i++) {
+          const clone = first.clone();
+          for (let j = clone.children.length - 1; j >= 0; j--)
+            if (clone.children[j].isCSS2DObject) clone.remove(clone.children[j]);
+          clone.position.set(
+            basePos.x + cfg.positions[i][0] - cfg.positions[0][0],
+            basePos.y,
+            basePos.z + cfg.positions[i][2] - cfg.positions[0][2],
+          );
+          scene.add(clone);
+        }
+      }
+      return allModels[0];
+    }
+    loadAllModels()
+      .then((dataModel) => {
+        dataHandler.objects.cube = dataModel;
+        const allBox = new THREE.Box3().setFromObject(scene);
+        const size = allBox.getSize(new THREE.Vector3());
+        const center = allBox.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = Math.max(maxDim * 1.5, 5);
+        camera.position.set(dist * 0.6, dist * 0.6, dist);
+        controls.target.copy(center);
+        controls.update();
+        console.log("All models loaded, scene size:", maxDim);
+      })
+      .catch((e) => console.warn("Model loading failed:", e));
 
 // ======================== 模型选择与移动 ========================
 const _raycaster = new THREE.Raycaster();
