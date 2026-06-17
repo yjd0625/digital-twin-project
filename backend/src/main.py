@@ -1,4 +1,4 @@
-\"\"\"主入口：启动 WebSocket 服务器并持续接收 PlantSimulation 数据\"\"\"
+"""主入口：启动 WebSocket 服务器并持续接收 PlantSimulation 数据"""
 import asyncio
 import logging
 

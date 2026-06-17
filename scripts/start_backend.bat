@@ -1,7 +1,9 @@
 @echo off
-cd /d "%~dp0..\backend"
-echo Installing dependencies...
-pip install -r requirements.txt
-echo Starting backend server...
-python -m src.main
-pause
+set "ROOT=%~dp0.."
+echo Starting backend with DT environment (conda run)...
+conda run --cwd "%ROOT%\backend" -n DT python -m src.main
+if %errorlevel% neq 0 (
+    echo.
+    echo Backend exited with code %errorlevel%.
+    pause
+)

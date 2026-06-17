@@ -1,17 +1,17 @@
-\"\"\"数据聚合、计算、格式化\"\"\"
+"""数据聚合、计算、格式化"""
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class DataProcessor:
-    \"\"\"对 PlantSimulation 的原始数据进行清洗、解析、格式化\"\"\"
+    """对 PlantSimulation 的原始数据进行清洗、解析、格式化"""
 
     @staticmethod
     def parse(raw: str) -> dict:
-        \"\"\"解析 PlantSimulation 发来的字符串，返回结构化字典\"
+        """解析 PlantSimulation 发来的字符串，返回结构化字典\"
         格式示例: \"machine_01,TEMP,85.2\" 或 JSON 字符串
-        \"\"\"
+        """
         raw = raw.strip()
         # 尝试 JSON 解析
         import json
@@ -29,7 +29,7 @@ class DataProcessor:
 
     @staticmethod
     def build_telemetry(device: str, metric: str, value: str) -> dict:
-        \"\"\"组装标准遥测消息格式\"\"\"
+        """组装标准遥测消息格式"""
         return {
             "type": "telemetry",
             "device": device,
