@@ -135,6 +135,7 @@ function deselectObject() {
 }
 renderer.domElement.addEventListener("pointerdown", (e) => {
   _ptrDown.x = e.clientX; _ptrDown.y = e.clientY;
+    _targetCamPos = null; // user input cancels transition
 });
 renderer.domElement.addEventListener("pointerup", (e) => {
   const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
@@ -234,29 +235,86 @@ function sendCommand(msg) {
       _targetCtrlTarget.set(cfg.target[0], cfg.target[1], cfg.target[2]);
     }
     function importModelFile(file) {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-        try {
-          const gltf = await (new GLTFLoader()).loadAsync(URL.createObjectURL(file));
-          const mdl = gltf.scene;
-          const box = new THREE.Box3().setFromObject(mdl);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const sc = maxDim > 0 ? 3 / maxDim : 1;
-          mdl.scale.set(sc, sc, sc);
-          mdl.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
-          mdl.traverse(function(ch) { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
-          const div = document.createElement("div");
-          div.textContent = file.name.replace(/\.[^.]+$/, "");
-          div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-          const lbl = new CSS2DObject(div); lbl.position.set(0, size.y * sc / 2 + 0.5, 0); mdl.add(lbl);
-          scene.add(mdl); allModelInstances.push(mdl); selectObject(mdl);
-          console.log("Imported:", file.name);
-        } catch(e) { console.error(e); }
-        URL.revokeObjectURL(reader.result);
-      }; reader.readAsDataURL(file);
+      const name = file.name;
+      const ext = name.split(".").pop().toLowerCase();
+      const label = name.replace(/\.[^.]+$/, "");
+      function addToScene(obj, sizeY) {
+        const div = document.createElement("div");
+        div.textContent = label;
+        div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
+        const lbl = new CSS2DObject(div); lbl.position.set(0, sizeY / 2 + 0.5, 0); obj.add(lbl);
+        scene.add(obj); allModelInstances.push(obj); selectObject(obj);
+        console.log("Imported:", name);
+      }
+      if (ext === "dxf" || ext === "dwg") {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          import("dxf-parser").then(function(mod) {
+            try {
+              const parser = new mod.default();
+              const drawing = parser.parseSync(e.target.result);
+              const group = new THREE.Group();
+              const matLine = new THREE.LineBasicMaterial({ color: 0x00aaff });
+              const matLoop = new THREE.LineBasicMaterial({ color: 0x3388ff });
+              function addLine(pts, closed) {
+                if (pts.length < 2) return;
+                const g = new THREE.BufferGeometry().setFromPoints(pts);
+                group.add(closed ? new THREE.LineLoop(g, matLoop) : new THREE.Line(g, matLine));
+              }
+              (drawing.entities || []).forEach(function(ent) {
+                try {
+                  if (ent.type === "LINE" && ent.vertices && ent.vertices.length >= 2) {
+                    addLine([new THREE.Vector3(ent.vertices[0].x, ent.vertices[0].y, 0), new THREE.Vector3(ent.vertices[1].x, ent.vertices[1].y, 0)]);
+                  } else if ((ent.type === "LWPOLYLINE" || ent.type === "POLYLINE") && ent.vertices && ent.vertices.length >= 2) {
+                    addLine(ent.vertices.map(function(v) { return new THREE.Vector3(v.x, v.y, 0); }), !!ent.closed);
+                  } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
+                    var pts = [];
+                    for (var a = 0; a <= 64; a++) { var ang = (a / 64) * Math.PI * 2; pts.push(new THREE.Vector3(ent.center.x + Math.cos(ang) * ent.radius, ent.center.y + Math.sin(ang) * ent.radius, 0)); }
+                    addLine(pts, true);
+                  } else if (ent.type === "ARC" && ent.center && ent.radius) {
+                    var pts2 = [];
+                    var sa = ((ent.startAngle || 0) * Math.PI) / 180;
+                    var ea = ((ent.endAngle || 360) * Math.PI) / 180;
+                    for (var i = 0; i <= 32; i++) { var a2 = sa + (ea - sa) * (i / 32); pts2.push(new THREE.Vector3(ent.center.x + Math.cos(a2) * ent.radius, ent.center.y + Math.sin(a2) * ent.radius, 0)); }
+                    addLine(pts2);
+                  }
+                } catch(e2) {} 
+              });
+              group.rotation.x = -Math.PI / 2;
+              group.updateMatrixWorld(true);
+              var box = new THREE.Box3().setFromObject(group);
+              var center = box.getCenter(new THREE.Vector3());
+              var size = box.getSize(new THREE.Vector3());
+              var maxDim = Math.max(size.x, size.y, size.z);
+              var sc = maxDim > 0 ? 3 / maxDim : 1;
+              group.scale.set(sc, sc, sc);
+              group.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
+              addToScene(group, size.y * sc);
+            } catch(e3) { console.error("DXF import error:", e3); }
+          });
+        };
+        reader.readAsText(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = async function() {
+          const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+          try {
+            const gltf = await (new GLTFLoader()).loadAsync(URL.createObjectURL(file));
+            const mdl = gltf.scene;
+            const box = new THREE.Box3().setFromObject(mdl);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const sc = maxDim > 0 ? 3 / maxDim : 1;
+            mdl.scale.set(sc, sc, sc);
+            mdl.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
+            mdl.traverse(function(ch) { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
+            addToScene(mdl, size.y * sc);
+          } catch(e) { console.error(e); }
+          URL.revokeObjectURL(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
     }
     function savePositions() {
       const data = allModelInstances.map(function(m) { return { x: m.position.x, y: m.position.y, z: m.position.z }; });
@@ -287,8 +345,8 @@ function animate() {
 
   // camera view transition
   if (_targetCamPos) {
-    camera.position.lerp(_targetCamPos, 0.06);
-    controls.target.lerp(_targetCtrlTarget, 0.06);
+    camera.position.lerp(_targetCamPos, 0.12);
+    controls.target.lerp(_targetCtrlTarget, 0.12);
     if (camera.position.distanceTo(_targetCamPos) < 0.05) _targetCamPos = null;
   }
   controls.update();
