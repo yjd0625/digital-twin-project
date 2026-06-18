@@ -41,3 +41,6 @@ simulation/models/backup/
 frontend/src/.history/
 
 .history/
+
+# PlantSimulation model files (proprietary, not included in repo)
+*.spp
