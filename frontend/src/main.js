@@ -114,12 +114,12 @@ const dataHandler = new DataHandler({ cube: dataDevice });
 // ======================== 模型选择与移动 ========================
 const _raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
-let selectedObject = null;
-let selectionBox = null;
 let isDragging = false;
 let _ptrDown = { x: 0, y: 0 };
 const MOVE_STEP = 0.1;
 let _ctrlDown = false;
+function _keyupCtrl(e) { if (e.key === "Control") _ctrlDown = false; }
+document.addEventListener("keyup", _keyupCtrl);
 const _dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 const selectedObjects = [];
@@ -175,6 +175,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Delete" && selectedObjects.length) {
     for (var i = selectedObjects.length - 1; i >= 0; i--) {
       var obj = selectedObjects[i];
+      obj.traverse(function(ch) { if (ch.isCSS2DObject && ch.element) ch.element.remove(); });
       var idx = allModelInstances.indexOf(obj);
       if (idx >= 0) allModelInstances.splice(idx, 1);
       scene.remove(obj);
