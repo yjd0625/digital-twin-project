@@ -139,7 +139,7 @@ let _labelsVisible = true;
 function toggleLabels() {
   _labelsVisible = !_labelsVisible;
   var btn = document.getElementById('btn-labels');
-  if (btn) btn.textContent = _labelsVisible ? '\\u{1F3F7} \\u6807\\u7B7E' : '\\u{1F3F7} \\u9690\\u85CF';
+  if (btn) btn.textContent = _labelsVisible ? '显示' : '隐藏';
   allModelInstances.forEach(function(m) {
     m.traverse(function(ch) {
       if (ch.isCSS2DObject) {
