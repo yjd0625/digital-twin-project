@@ -49,7 +49,36 @@ export function initImporter(ctx) {
   /** 保存所有模型的位置/旋转/缩放到 localStorage */
   function savePositions() {
     var data = allModelInstances.map(function(m) {
+    
+  // ======================== 默认变换管理（复位用）=======================
+  var _defaultTransforms = null;
+
+  /** 保存当前所有模型的位置/旋转/缩放作为默认值 */
+  function saveDefaultTransforms() {
+    _defaultTransforms = allModelInstances.map(function(m) {
       return {
+        pos: { x: m.position.x, y: m.position.y, z: m.position.z },
+        rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
+        scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
+      };
+    });
+  }
+
+  /** 恢复所有模型到保存的默认变换 */
+  function resetPositions() {
+    if (!_defaultTransforms) return;
+    allModelInstances.forEach(function(m, i) {
+      if (i < _defaultTransforms.length) {
+        var d = _defaultTransforms[i];
+        m.position.set(d.pos.x, d.pos.y, d.pos.z);
+        m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+        m.scale.set(d.scl.x, d.scl.y, d.scl.z);
+      }
+    });
+    savePositions();
+  }
+
+  return {
         pos: { x: m.position.x, y: m.position.y, z: m.position.z },
         rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
         scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
@@ -78,5 +107,34 @@ export function initImporter(ctx) {
     } catch(e) { console.warn(e); }
   }
 
-  return { setView, updateViewTransition, cancelViewTransition, savePositions, loadPositions };
+
+  // ======================== 默认变换管理（复位用）=======================
+  var _defaultTransforms = null;
+
+  /** 保存当前所有模型的位置/旋转/缩放作为默认值 */
+  function saveDefaultTransforms() {
+    _defaultTransforms = allModelInstances.map(function(m) {
+      return {
+        pos: { x: m.position.x, y: m.position.y, z: m.position.z },
+        rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
+        scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
+      };
+    });
+  }
+
+  /** 恢复所有模型到保存的默认变换 */
+  function resetPositions() {
+    if (!_defaultTransforms) return;
+    allModelInstances.forEach(function(m, i) {
+      if (i < _defaultTransforms.length) {
+        var d = _defaultTransforms[i];
+        m.position.set(d.pos.x, d.pos.y, d.pos.z);
+        m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+        m.scale.set(d.scl.x, d.scl.y, d.scl.z);
+      }
+    });
+    savePositions();
+  }
+
+  return { setView, updateViewTransition, cancelViewTransition, savePositions, loadPositions, saveDefaultTransforms, resetPositions };
 }
