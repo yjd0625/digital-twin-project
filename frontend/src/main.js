@@ -178,6 +178,7 @@ document.addEventListener("keydown", (e) => {
     for (var i = selectedObjects.length - 1; i >= 0; i--) {
       var obj = selectedObjects[i];
       obj.traverse(function(ch) { if (ch.isCSS2DObject && ch.element) ch.element.remove(); });
+      if (obj.userData && obj.userData.modelId) idbDel(obj.userData.modelId);
       var idx = allModelInstances.indexOf(obj);
       if (idx >= 0) allModelInstances.splice(idx, 1);
       scene.remove(obj);
@@ -194,7 +195,11 @@ document.addEventListener("keydown", (e) => {
     case "ArrowDown":  selectedObjects.forEach(function(o) { o.position.x -= MOVE_STEP; }); break;
     case "ArrowLeft":  selectedObjects.forEach(function(o) { o.position.z -= MOVE_STEP; }); break;
     case "ArrowRight": selectedObjects.forEach(function(o) { o.position.z += MOVE_STEP; }); break;
-    default: moved = false;
+    
+    case "q": case "Q": selectedObjects.forEach(function(o) { o.rotation.y -= Math.PI / 12; }); break;
+    case "e": case "E": selectedObjects.forEach(function(o) { o.rotation.y += Math.PI / 12; }); break;
+    case "[": selectedObjects.forEach(function(o) { var s = o.scale.x * 0.9; o.scale.set(s, s, s); }); break;
+    case "]": selectedObjects.forEach(function(o) { var s = o.scale.x * 1.1; o.scale.set(s, s, s); }); break;default: moved = false;
   }
   if (moved) { updateSelectionBoxes(); savePositions(); }
 });
@@ -265,6 +270,49 @@ function sendCommand(msg) {
   else { alert("WebSocket \u672a\u8fde\u63a5"); }
 }
     // ==== view switching + model import + position persistence ====
+
+    // IndexedDB persistence for imported models
+    const IDB_NAME = "DT_ModelStore";
+    const IDB_VER = 1;
+    const IDB_STORE = "models";
+    function idbOpen() {
+      return new Promise(function(resolve, reject) {
+        var r = indexedDB.open(IDB_NAME, IDB_VER);
+        r.onupgradeneeded = function() { r.result.createObjectStore(IDB_STORE, { keyPath: "id" }); };
+        r.onsuccess = function() { resolve(r.result); };
+        r.onerror = function() { reject(r.error); };
+      });
+    }
+    function idbPut(obj) {
+      return idbOpen().then(function(db) {
+        return new Promise(function(resolve, reject) {
+          var tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).put(obj);
+          tx.oncomplete = function() { resolve(); };
+          tx.onerror = function() { reject(tx.error); };
+        });
+      });
+    }
+    function idbGetAll() {
+      return idbOpen().then(function(db) {
+        return new Promise(function(resolve) {
+          var tx = db.transaction(IDB_STORE);
+          var r = tx.objectStore(IDB_STORE).getAll();
+          r.onsuccess = function() { resolve(r.result); };
+          r.onerror = function() { resolve([]); };
+        });
+      });
+    }
+    function idbDel(id) {
+      return idbOpen().then(function(db) {
+        return new Promise(function(resolve, reject) {
+          var tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).delete(id);
+          tx.oncomplete = function() { resolve(); };
+          tx.onerror = function() { reject(tx.error); };
+        });
+      });
+    }
     const VIEW_PRESETS = {
       top:     { pos: [0, 15, 0.01], target: [0, 0, 0] },
       front:   { pos: [0, 0, 15],    target: [0, 0, 0] },
@@ -368,8 +416,10 @@ function sendCommand(msg) {
       }
     }
     function savePositions() {
-      const data = allModelInstances.map(function(m) { return { x: m.position.x, y: m.position.y, z: m.position.z }; });
-      localStorage.setItem("dt_model_positions", JSON.stringify(data));
+      var data = allModelInstances.map(function(m) {
+        return { pos: {x:m.position.x,y:m.position.y,z:m.position.z}, rot: {x:m.rotation.x,y:m.rotation.y,z:m.rotation.z}, scl: {x:m.scale.x,y:m.scale.y,z:m.scale.z} };
+      });
+      localStorage.setItem("dt_model_transforms", JSON.stringify(data));
     }
     function loadPositions() {
       const raw = localStorage.getItem("dt_model_positions"); if (!raw) return;
