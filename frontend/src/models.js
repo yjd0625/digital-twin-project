@@ -163,11 +163,11 @@ export async function loadDXFModel(scene, url, options = {}) {
   var group = new THREE.Group();
   var geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-  group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00aaff })));
+  group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x33ff99 })));
 
   // 透明点击面（方便选中）
   var pw = Math.max(mx - nx || 1, 1), ph = Math.max(my - ny || 1, 1);
-  var pgeo = new THREE.PlaneGeometry(pw * 0.5, ph * 0.5);
+  var pgeo = new THREE.PlaneGeometry(pw , ph);
   var pmat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.005, side:THREE.DoubleSide });
   var cp = new THREE.Mesh(pgeo, pmat); cp.position.set((mx+nx)/2, (my+ny)/2, 0); group.add(cp);
 
@@ -178,7 +178,7 @@ export async function loadDXFModel(scene, url, options = {}) {
   var center = box.getCenter(new THREE.Vector3());
   var size = box.getSize(new THREE.Vector3());
   var pos = options.position || [0, 0, 0];
-  group.position.set(pos[0] - center.x, pos[1] - box.min.y, pos[2] - center.z );
+  group.position.set(pos[0] - center.x, pos[1] - box.min.y, pos[2] - center.z);
   console.log("DXF bounding box:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1), "scale:", sc);
 
   // 图纸旋转：DXF 是 XY 平面，平铺到 XZ 地面
