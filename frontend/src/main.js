@@ -114,6 +114,8 @@ const dataHandler = new DataHandler({ cube: dataDevice });
 // ======================== 模型选择与移动 ========================
 const _raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
+let selectedObject = null;
+let selectionBox = null;
 let isDragging = false;
 let _ptrDown = { x: 0, y: 0 };
 const MOVE_STEP = 0.1;
@@ -223,11 +225,14 @@ renderer.domElement.addEventListener("pointermove", (e) => {
   _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   _raycaster.setFromCamera(_mouse, camera);
   const pt = _raycaster.ray.intersectPlane(_dragPlane, new THREE.Vector3());
-  if (pt) {
-    selectedObject.position.x = pt.x;
-    selectedObject.position.z = pt.z;
-          savePositions();
-    if (selectionBox) selectionBox.update();
+    if (pt) {
+    if (selectedObjects.length) {
+      var dx = pt.x - selectedObjects[0].position.x;
+      var dz = pt.z - selectedObjects[0].position.z;
+      selectedObjects.forEach(function(o) { o.position.x += dx; o.position.z += dz; });
+      updateSelectionBoxes();
+      savePositions();
+    }
   }
 });
 document.addEventListener("pointerup", () => {
