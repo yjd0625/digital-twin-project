@@ -71,6 +71,7 @@ async function loadAllModels() {
     const layout = await loadDXFModel(scene, "/models/layout.dxf", { label: "\u4ea7\u7ebf\u5e03\u5c40\u56fe", position: [0, 0, 0] });
     if (layout) allModelInstances.push(layout);
   } catch(e) { console.warn("DXF layout load failed:", e); }
+  return allModelInstances;
 }
 
 // ======================== 数据驱动所有模型 ========================
