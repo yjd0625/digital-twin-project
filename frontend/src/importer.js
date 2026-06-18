@@ -61,11 +61,9 @@ export function initImporter(ctx) {
     if (!raw) return;
     try {
       const data = JSON.parse(raw);
-      // 条目数与模型数不匹配 → 旧缓存无效，清除后跳过
+      // 条目数与模型数不匹配 → 暂不恢复，保留旧数据等下次匹配
       if (data.length !== allModelInstances.length) {
-        console.warn("Stale localStorage data, clearing (expected", allModelInstances.length, "got", data.length, ")");
-        localStorage.removeItem("dt_model_transforms");
-        localStorage.removeItem("dt_model_positions");
+        console.warn("loadPositions: model count mismatch (expected", allModelInstances.length, "got", data.length, "), skipping");
         return;
       }
       allModelInstances.forEach(function(m, i) {

@@ -69,7 +69,7 @@ async function loadAllModels() {
   // --- DXF 产线布局图 ---
   try {
     console.time("DXF load");
-    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, -2.4, 0], scale: 0.001 });
+    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 10], scale: 0.001 });
     console.timeEnd("DXF load");
     if (layout) allModelInstances.push(layout);
   } catch(e) { console.warn("DXF layout load failed:", e); }
@@ -133,7 +133,24 @@ function sendCommand(msg) {
 }
 
 // ======================== UI 绑定 ========================
-const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions });
+
+// ======================== 标签显隐切换 ========================
+let _labelsVisible = true;
+function toggleLabels() {
+  _labelsVisible = !_labelsVisible;
+  var btn = document.getElementById('btn-labels');
+  if (btn) btn.textContent = _labelsVisible ? '\\u{1F3F7} \\u6807\\u7B7E' : '\\u{1F3F7} \\u9690\\u85CF';
+  allModelInstances.forEach(function(m) {
+    m.traverse(function(ch) {
+      if (ch.isCSS2DObject) {
+        ch.visible = _labelsVisible;
+        if (ch.element) ch.element.style.display = _labelsVisible ? '' : 'none';
+      }
+    });
+  });
+}
+
+const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions, onToggleLabels: toggleLabels });
 connectWebSocket();
 
 // ======================== 全局错误捕获（控制台显示在 #info）========================
