@@ -119,19 +119,36 @@ let selectionBox = null;
 let isDragging = false;
 let _ptrDown = { x: 0, y: 0 };
 const MOVE_STEP = 0.1;
+let _ctrlDown = false;
 const _dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-function selectObject(obj) {
-  if (selectedObject === obj) return;
-  deselectObject();
-  selectedObject = obj;
-  selectionBox = new THREE.BoxHelper(obj, 0x00ff00);
-  selectionBox.update();
-  scene.add(selectionBox);
+const selectedObjects = [];
+const selectionBoxes = {};
+function selectObject(obj, multi) {
+  if (multi) {
+    if (selectedObjects.indexOf(obj) >= 0) {
+      if (selectionBoxes[obj.id]) { scene.remove(selectionBoxes[obj.id]); delete selectionBoxes[obj.id]; }
+      var i = selectedObjects.indexOf(obj);
+      if (i >= 0) selectedObjects.splice(i, 1);
+      return;
+    }
+    selectedObjects.push(obj);
+  } else {
+    deselectAll();
+    selectedObjects.push(obj);
+  }
+  var bx = new THREE.BoxHelper(obj, 0x00ff00);
+  bx.update();
+  scene.add(bx);
+  selectionBoxes[obj.id] = bx;
 }
-function deselectObject() {
-  if (selectionBox) { scene.remove(selectionBox); selectionBox = null; }
-  selectedObject = null;
+function deselectAll() {
+  for (var k in selectionBoxes) { scene.remove(selectionBoxes[k]); }
+  for (var k in selectionBoxes) delete selectionBoxes[k];
+  selectedObjects.length = 0;
+}
+function updateSelectionBoxes() {
+  for (var k in selectionBoxes) selectionBoxes[k].update();
 }
 renderer.domElement.addEventListener("pointerdown", (e) => {
   _ptrDown.x = e.clientX; _ptrDown.y = e.clientY;
@@ -154,34 +171,38 @@ renderer.domElement.addEventListener("pointerup", (e) => {
   if (!hit) deselectObject();
 });
 document.addEventListener("keydown", (e) => {
-  if (!selectedObject) return;
-  let moved = true;
+  if (e.key === "Control") { _ctrlDown = true; return; }
+  if (e.key === "Delete" && selectedObjects.length) {
+    for (var i = selectedObjects.length - 1; i >= 0; i--) {
+      var obj = selectedObjects[i];
+      var idx = allModelInstances.indexOf(obj);
+      if (idx >= 0) allModelInstances.splice(idx, 1);
+      scene.remove(obj);
+      if (dataHandler.objects.cube === obj)
+        dataHandler.objects.cube = allModelInstances.length > 0 ? allModelInstances[0] : null;
+    }
+    deselectAll();
+    return;
+  }
+  if (!selectedObjects.length) return;
+  var moved = true;
   switch (e.key) {
-    case "ArrowUp":    selectedObject.position.x += MOVE_STEP; break;
-    case "ArrowDown":  selectedObject.position.x -= MOVE_STEP; break;
-    case "ArrowLeft":  selectedObject.position.z -= MOVE_STEP; break;
-    case "ArrowRight": selectedObject.position.z += MOVE_STEP; break;
-    case "Delete":
-    { const idx = allModelInstances.indexOf(selectedObject);
-    if (idx >= 0) allModelInstances.splice(idx, 1);
-    scene.remove(selectedObject);
-    if (dataHandler.objects.cube === selectedObject)
-      dataHandler.objects.cube = allModelInstances.length > 0 ? allModelInstances[0] : null;
-    deselectObject(); }
-    break;
+    case "ArrowUp":    selectedObjects.forEach(function(o) { o.position.x += MOVE_STEP; }); break;
+    case "ArrowDown":  selectedObjects.forEach(function(o) { o.position.x -= MOVE_STEP; }); break;
+    case "ArrowLeft":  selectedObjects.forEach(function(o) { o.position.z -= MOVE_STEP; }); break;
+    case "ArrowRight": selectedObjects.forEach(function(o) { o.position.z += MOVE_STEP; }); break;
     default: moved = false;
   }
-  if (moved && selectionBox) selectionBox.update();
-  if (moved) savePositions();
+  if (moved) { updateSelectionBoxes(); savePositions(); }
 });
 renderer.domElement.addEventListener("pointerdown", (e) => {
-  if (e.shiftKey && selectedObject) {
+  if (e.shiftKey && selectedObjects.length) {
     isDragging = true;
     controls.enabled = false;
   }
 });
 renderer.domElement.addEventListener("pointermove", (e) => {
-  if (!isDragging || !selectedObject) return;
+  if (!isDragging || !selectedObjects.length) return;
   const rect = renderer.domElement.getBoundingClientRect();
   _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -254,55 +275,57 @@ function sendCommand(msg) {
         scene.add(obj); allModelInstances.push(obj); selectObject(obj);
         console.log("Imported:", name);
       }
-      if (ext === "dxf" || ext === "dwg") {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          import("dxf-parser").then(function(mod) {
+        if (ext === "dxf" || ext === "dwg") {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      import("dxf-parser").then(function(mod) {
+        try {
+          var parser = new mod.default();
+          var drawing = parser.parseSync(e.target.result);
+          if (!drawing.entities || !drawing.entities.length) { console.warn("DXF has no entities"); return; }
+          var verts = [];
+          var mx = -Infinity, nx = Infinity, my = -Infinity, ny = Infinity;
+          function addSeg(x1, y1, x2, y2) { verts.push(x1, y1, 0, x2, y2, 0); if (x1 > mx) mx = x1; if (x1 < nx) nx = x1; if (x2 > mx) mx = x2; if (x2 < nx) nx = x2; if (y1 > my) my = y1; if (y1 < ny) ny = y1; if (y2 > my) my = y2; if (y2 < ny) ny = y2; }
+          drawing.entities.forEach(function(ent) {
             try {
-              const parser = new mod.default();
-              const drawing = parser.parseSync(e.target.result);
-              const group = new THREE.Group();
-              const matLine = new THREE.LineBasicMaterial({ color: 0x00aaff });
-              const matLoop = new THREE.LineBasicMaterial({ color: 0x3388ff });
-              function addLine(pts, closed) {
-                if (pts.length < 2) return;
-                const g = new THREE.BufferGeometry().setFromPoints(pts);
-                group.add(closed ? new THREE.LineLoop(g, matLoop) : new THREE.Line(g, matLine));
+              if (ent.type === "LINE" && ent.vertices && ent.vertices.length >= 2) {
+                addSeg(ent.vertices[0].x, ent.vertices[0].y, ent.vertices[1].x, ent.vertices[1].y);
+              } else if ((ent.type === "LWPOLYLINE" || ent.type === "POLYLINE") && ent.vertices && ent.vertices.length >= 2) {
+                for (var vi = 1; vi < ent.vertices.length; vi++) addSeg(ent.vertices[vi-1].x, ent.vertices[vi-1].y, ent.vertices[vi].x, ent.vertices[vi].y);
+                if (ent.closed) { var v = ent.vertices; addSeg(v[v.length-1].x, v[v.length-1].y, v[0].x, v[0].y); }
+              } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
+                for (var a = 0; a < 64; a++) { var a1 = (a/64)*Math.PI*2, a2 = ((a+1)/64)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
+              } else if (ent.type === "ARC" && ent.center && ent.radius) {
+                var sa = (ent.startAngle||0)*Math.PI/180, ea = (ent.endAngle||360)*Math.PI/180;
+                for (var i = 0; i < 32; i++) { var a1 = sa+(ea-sa)*(i/32), a2 = sa+(ea-sa)*((i+1)/32); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
               }
-              (drawing.entities || []).forEach(function(ent) {
-                try {
-                  if (ent.type === "LINE" && ent.vertices && ent.vertices.length >= 2) {
-                    addLine([new THREE.Vector3(ent.vertices[0].x, ent.vertices[0].y, 0), new THREE.Vector3(ent.vertices[1].x, ent.vertices[1].y, 0)]);
-                  } else if ((ent.type === "LWPOLYLINE" || ent.type === "POLYLINE") && ent.vertices && ent.vertices.length >= 2) {
-                    addLine(ent.vertices.map(function(v) { return new THREE.Vector3(v.x, v.y, 0); }), !!ent.closed);
-                  } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
-                    var pts = [];
-                    for (var a = 0; a <= 64; a++) { var ang = (a / 64) * Math.PI * 2; pts.push(new THREE.Vector3(ent.center.x + Math.cos(ang) * ent.radius, ent.center.y + Math.sin(ang) * ent.radius, 0)); }
-                    addLine(pts, true);
-                  } else if (ent.type === "ARC" && ent.center && ent.radius) {
-                    var pts2 = [];
-                    var sa = ((ent.startAngle || 0) * Math.PI) / 180;
-                    var ea = ((ent.endAngle || 360) * Math.PI) / 180;
-                    for (var i = 0; i <= 32; i++) { var a2 = sa + (ea - sa) * (i / 32); pts2.push(new THREE.Vector3(ent.center.x + Math.cos(a2) * ent.radius, ent.center.y + Math.sin(a2) * ent.radius, 0)); }
-                    addLine(pts2);
-                  }
-                } catch(e2) {} 
-              });
-              group.rotation.x = -Math.PI / 2;
-              group.updateMatrixWorld(true);
-              var box = new THREE.Box3().setFromObject(group);
-              var center = box.getCenter(new THREE.Vector3());
-              var size = box.getSize(new THREE.Vector3());
-              var maxDim = Math.max(size.x, size.y, size.z);
-              var sc = maxDim > 0 ? 3 / maxDim : 1;
-              group.scale.set(sc, sc, sc);
-              group.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
-              addToScene(group, size.y * sc);
-            } catch(e3) { console.error("DXF import error:", e3); }
+            } catch(e2) {}
           });
-        };
-        reader.readAsText(file);
-      } else {
+          if (!verts.length) { console.warn("DXF no renderable entities"); return; }
+          var group = new THREE.Group();
+          var geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+          group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00aaff })));
+          var pw = Math.max(mx - nx || 1, 1), ph = Math.max(my - ny || 1, 1);
+          var pgeo = new THREE.PlaneGeometry(pw * 1.2, ph * 1.2);
+          var pmat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.02, side: THREE.DoubleSide, depthWrite: false });
+          var clickPlane = new THREE.Mesh(pgeo, pmat);
+          clickPlane.position.set((mx + nx) / 2, (my + ny) / 2, 0);
+          group.add(clickPlane);
+          var box = new THREE.Box3().setFromObject(group);
+          var center = box.getCenter(new THREE.Vector3());
+          var size = box.getSize(new THREE.Vector3());
+          var maxDim = Math.max(size.x, size.y, size.z);
+          var sc = maxDim > 0 ? 3 / maxDim : 1;
+          group.rotation.x = -Math.PI / 2;
+          group.scale.set(sc, sc, sc);
+          group.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
+          addToScene(group, size.y * sc);
+        } catch(e3) { console.error("DXF error:", e3); }
+      });
+    };
+    reader.readAsText(file);
+  } else {
         const reader = new FileReader();
         reader.onload = async function() {
           const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");

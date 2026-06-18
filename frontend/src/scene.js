@@ -52,7 +52,7 @@ export function createScene(container) {
   scene.add(backLight);
 
   // --- 地面网格（帮助判断空间位置） ---
-  const grid = new THREE.GridHelper(10, 20, 0x88aaff, 0x335588);
+  const grid = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
   grid.position.y = 0;
   scene.add(grid);
 
