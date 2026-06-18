@@ -200,6 +200,10 @@ document.addEventListener("keydown", (e) => {
     case "e": case "E": selectedObjects.forEach(function(o) { o.rotation.y += Math.PI / 12; }); break;
     case "[": selectedObjects.forEach(function(o) { var s = o.scale.x * 0.9; o.scale.set(s, s, s); }); break;
     case "]": selectedObjects.forEach(function(o) { var s = o.scale.x * 1.1; o.scale.set(s, s, s); }); break;default: moved = false;
+    case "a": case "A": selectedObjects.forEach(function(o) { o.rotation.x -= Math.PI / 12; }); break;
+    case "d": case "D": selectedObjects.forEach(function(o) { o.rotation.x += Math.PI / 12; }); break;
+    case "z": case "Z": selectedObjects.forEach(function(o) { o.rotation.z -= Math.PI / 12; }); break;
+    case "c": case "C": selectedObjects.forEach(function(o) { o.rotation.z += Math.PI / 12; }); break;
   }
   if (moved) { updateSelectionBoxes(); savePositions(); }
 });
