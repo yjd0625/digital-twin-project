@@ -15,7 +15,7 @@ export function createScene(container) {
   // 用 window.inner 兜底，避免 body 高度为 0 时摄像机比率出错
   const w = container.clientWidth || window.innerWidth;
   const h = container.clientHeight || window.innerHeight;
-  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100000);
   camera.position.set(5, 5, 10);
   camera.lookAt(0, 0, 0);
 
@@ -52,7 +52,7 @@ export function createScene(container) {
   scene.add(backLight);
 
   // --- 地面网格（帮助判断空间位置） ---
-  const grid = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
+  const grid = new THREE.GridHelper(60, 30, 0x88aaff, 0x335588);
   grid.position.y = 0;
   scene.add(grid);
 

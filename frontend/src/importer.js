@@ -8,22 +8,21 @@ export function initImporter(ctx) {
   const { scene, camera, controls, allModelInstances } = ctx;
 
   // ======================== 视角切换 ========================
-  var VIEW_PRESETS = {
+  const VIEW_PRESETS = {
     top:     { pos: [0, 15, 0.01], target: [0, 0, 0] },
     front:   { pos: [0, 0, 15],    target: [0, 0, 0] },
     side:    { pos: [15, 0, 0],    target: [0, 0, 0] },
     default: { pos: null,          target: [0, 0, 0] },
   };
-  var _targetCamPos = null;
-  var _targetCtrlTarget = new THREE.Vector3(0, 0, 0);
+  let _targetCamPos = null;
+  const _targetCtrlTarget = new THREE.Vector3(0, 0, 0);
 
-  /** 切换到预设视角 */
   function setView(name) {
-    var cfg = VIEW_PRESETS[name]; if (!cfg) return;
+    const cfg = VIEW_PRESETS[name]; if (!cfg) return;
     if (name === "default") {
-      var b = new THREE.Box3().setFromObject(scene);
-      var s = b.getSize(new THREE.Vector3());
-      var d = Math.max(Math.max(s.x, s.y, s.z) * 1.5, 5);
+      const b = new THREE.Box3().setFromObject(scene);
+      const s = b.getSize(new THREE.Vector3());
+      const d = Math.max(Math.max(s.x, s.y, s.z) * 1.5, 5);
       _targetCamPos = new THREE.Vector3(d * 0.6, d * 0.6, d);
     } else {
       _targetCamPos = new THREE.Vector3(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
@@ -31,7 +30,6 @@ export function initImporter(ctx) {
     _targetCtrlTarget.set(cfg.target[0], cfg.target[1], cfg.target[2]);
   }
 
-  /** 在动画循环中调用，平滑过渡到目标视角 */
   function updateViewTransition() {
     if (_targetCamPos) {
       camera.position.lerp(_targetCamPos, 0.12);
@@ -40,7 +38,6 @@ export function initImporter(ctx) {
     }
   }
 
-  /** 用户操作时取消正在播放的视角动画 */
   function cancelViewTransition() {
     _targetCamPos = null;
   }
@@ -48,37 +45,8 @@ export function initImporter(ctx) {
   // ======================== 变换状态持久化（localStorage）=======================
   /** 保存所有模型的位置/旋转/缩放到 localStorage */
   function savePositions() {
-    var data = allModelInstances.map(function(m) {
-    
-  // ======================== 默认变换管理（复位用）=======================
-  var _defaultTransforms = null;
-
-  /** 保存当前所有模型的位置/旋转/缩放作为默认值 */
-  function saveDefaultTransforms() {
-    _defaultTransforms = allModelInstances.map(function(m) {
+    const data = allModelInstances.map(function(m) {
       return {
-        pos: { x: m.position.x, y: m.position.y, z: m.position.z },
-        rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
-        scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
-      };
-    });
-  }
-
-  /** 恢复所有模型到保存的默认变换 */
-  function resetPositions() {
-    if (!_defaultTransforms) return;
-    allModelInstances.forEach(function(m, i) {
-      if (i < _defaultTransforms.length) {
-        var d = _defaultTransforms[i];
-        m.position.set(d.pos.x, d.pos.y, d.pos.z);
-        m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
-        m.scale.set(d.scl.x, d.scl.y, d.scl.z);
-      }
-    });
-    savePositions();
-  }
-
-  return {
         pos: { x: m.position.x, y: m.position.y, z: m.position.z },
         rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
         scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
@@ -87,12 +55,19 @@ export function initImporter(ctx) {
     localStorage.setItem("dt_model_transforms", JSON.stringify(data));
   }
 
-  /** 从 localStorage 恢复，兼容旧版 dt_model_positions 格式 */
+  /** 从 localStorage 恢复变换状态，兼容旧版 dt_model_positions 格式 */
   function loadPositions() {
-    var raw = localStorage.getItem("dt_model_transforms") || localStorage.getItem("dt_model_positions");
+    const raw = localStorage.getItem("dt_model_transforms") || localStorage.getItem("dt_model_positions");
     if (!raw) return;
     try {
-      var data = JSON.parse(raw);
+      const data = JSON.parse(raw);
+      // 条目数与模型数不匹配 → 旧缓存无效，清除后跳过
+      if (data.length !== allModelInstances.length) {
+        console.warn("Stale localStorage data, clearing (expected", allModelInstances.length, "got", data.length, ")");
+        localStorage.removeItem("dt_model_transforms");
+        localStorage.removeItem("dt_model_positions");
+        return;
+      }
       allModelInstances.forEach(function(m, i) {
         if (i < data.length) {
           if (data[i].pos) {
@@ -104,14 +79,13 @@ export function initImporter(ctx) {
           }
         }
       });
-    } catch(e) { console.warn(e); }
+    } catch(e) { console.warn("loadPositions error:", e); }
   }
 
-
   // ======================== 默认变换管理（复位用）=======================
-  var _defaultTransforms = null;
+  let _defaultTransforms = null;
 
-  /** 保存当前所有模型的位置/旋转/缩放作为默认值 */
+  /** 保存当前所有模型的位置/旋转/缩放作为默认值（复位目标） */
   function saveDefaultTransforms() {
     _defaultTransforms = allModelInstances.map(function(m) {
       return {
@@ -122,12 +96,12 @@ export function initImporter(ctx) {
     });
   }
 
-  /** 恢复所有模型到保存的默认变换 */
+  /** 恢复所有模型到保存的默认变换并持久化 */
   function resetPositions() {
     if (!_defaultTransforms) return;
     allModelInstances.forEach(function(m, i) {
       if (i < _defaultTransforms.length) {
-        var d = _defaultTransforms[i];
+        const d = _defaultTransforms[i];
         m.position.set(d.pos.x, d.pos.y, d.pos.z);
         m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
         m.scale.set(d.scl.x, d.scl.y, d.scl.z);
@@ -136,5 +110,14 @@ export function initImporter(ctx) {
     savePositions();
   }
 
-  return { setView, updateViewTransition, cancelViewTransition, savePositions, loadPositions, saveDefaultTransforms, resetPositions };
+  // ======================== 公开接口 ========================
+  return {
+    setView,
+    updateViewTransition,
+    cancelViewTransition,
+    savePositions,
+    loadPositions,
+    saveDefaultTransforms,
+    resetPositions,
+  };
 }

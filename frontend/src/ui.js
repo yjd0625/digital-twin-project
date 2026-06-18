@@ -31,5 +31,8 @@ export function setupUI(controls, sendCommand, extra) {
   document.getElementById("btn-front")?.addEventListener("click", () => extra?.onView?.("front"));
   document.getElementById("btn-side")?.addEventListener("click", () => extra?.onView?.("side"));
   document.getElementById("btn-default")?.addEventListener("click", () => extra?.onView?.("default"));
+  // 复位按钮
+  document.getElementById("btn-reset")?.addEventListener("click", () => extra?.onReset?.());
+
   return { updateInfo };
 }

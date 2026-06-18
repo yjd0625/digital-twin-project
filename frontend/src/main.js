@@ -68,7 +68,7 @@ async function loadAllModels() {
 
   // --- DXF 产线布局图 ---
   try {
-    const layout = await loadDXFModel(scene, "/models/layout.dxf", { label: "产线布局图", position: [0, 0, 0] });
+    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 0], scale: 0.001 });
     if (layout) allModelInstances.push(layout);
   } catch(e) { console.warn("DXF layout load failed:", e); }
   return allModelInstances;
@@ -99,7 +99,8 @@ loadAllModels()
     var size = allBox.getSize(new THREE.Vector3());
     var center = allBox.getCenter(new THREE.Vector3());
     var maxDim = Math.max(size.x, size.y, size.z);
-    var dist = Math.max(maxDim * 1.5, 5);
+    console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
+    var dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.copy(center);
     controls.update();
@@ -130,10 +131,15 @@ function sendCommand(msg) {
 }
 
 // ======================== UI 绑定 ========================
-const ui = setupUI(controls, sendCommand, { onView: importer.setView });
+const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions });
 connectWebSocket();
 
-document.getElementById("btn-reset")?.addEventListener("click", function() { importer.resetPositions(); });
+// ======================== 全局错误捕获（控制台显示在 #info）========================
+window.addEventListener("error", function(e) {
+  var info = document.getElementById("info");
+  if (info) { info.textContent = "JS Error: " + (e.message || e.error); info.style.background = "rgba(200,0,0,0.8)"; }
+  console.error("Global error:", e);
+});
 
 // ======================== 窗口尺寸自适应 ========================
 window.addEventListener("resize", function() {
