@@ -108,7 +108,6 @@ export function initInteraction(ctx, importer) {
       for (var i = selectedObjects.length - 1; i >= 0; i--) {
         var obj = selectedObjects[i];
         obj.traverse(function(ch) { if (ch.isCSS2DObject && ch.element) ch.element.remove(); });
-        if (obj.userData && obj.userData.modelId) importer.deleteModel(obj.userData.modelId);
         var idx = allModelInstances.indexOf(obj);
         if (idx >= 0) allModelInstances.splice(idx, 1);
         scene.remove(obj);
