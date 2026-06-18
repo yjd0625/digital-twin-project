@@ -161,6 +161,14 @@ document.addEventListener("keydown", (e) => {
     case "ArrowDown":  selectedObject.position.x -= MOVE_STEP; break;
     case "ArrowLeft":  selectedObject.position.z -= MOVE_STEP; break;
     case "ArrowRight": selectedObject.position.z += MOVE_STEP; break;
+    case "Delete":
+    { const idx = allModelInstances.indexOf(selectedObject);
+    if (idx >= 0) allModelInstances.splice(idx, 1);
+    scene.remove(selectedObject);
+    if (dataHandler.objects.cube === selectedObject)
+      dataHandler.objects.cube = allModelInstances.length > 0 ? allModelInstances[0] : null;
+    deselectObject(); }
+    break;
     default: moved = false;
   }
   if (moved && selectionBox) selectionBox.update();
