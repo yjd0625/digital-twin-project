@@ -46,7 +46,10 @@ document.body.appendChild(axisRenderer.domElement);
 // ======================== DataHandler 占位对象 ========================
 const _placeholder = createDefaultDevice(scene, { label: "" });
 _placeholder.visible = false;
-const dataHandler = new DataHandler({ cube: _placeholder });
+const dataHandler = new DataHandler({
+  allModelInstances: allModelInstances,   // 模型
+  updateInfo: ui.updateInfo               // 状态栏
+});
 
 // ======================== 加载初始模型（含 DXF 布局图）=======================
 const allModelInstances = [];
@@ -62,6 +65,7 @@ async function loadAllModels() {
     for (let i = 0; i < cfg.count; i++) {
       const lbl = cfg.count > 1 ? cfg.label + " #" + (i + 1) : cfg.label;
       const model = await loadGLTFModel(scene, cfg.url, { label: lbl, rotateX: -Math.PI / 2, position: cfg.positions[i], labelOffset: 3 });
+      model.userData.id = lbl;  // 设备 ID（后续通过 dataHandler.objects.cube 访问）
       allModelInstances.push(model);
     }
   }
@@ -77,17 +81,6 @@ async function loadAllModels() {
 }
 
 // ======================== 数据驱动所有模型 ========================
-function applyDataToModels(data) {
-  const raw = data.value || data.raw || JSON.stringify(data);
-  const val = raw.length / 10;
-  const hue = ((raw.length * 10) % 360) / 360;
-  allModelInstances.forEach(function(m) {
-    m.rotation.x = val; m.rotation.y = val * 0.5;
-    m.traverse(function(ch) { if (ch.isMesh && ch.material) ch.material.color.setHSL(hue, 0.8, 0.5); });
-  });
-  ui.updateInfo("最新数据: " + raw);
-}
-
 // ======================== 初始化各模块 ========================
 const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
 const importer = initImporter(ctx);
@@ -96,7 +89,7 @@ const interaction = initInteraction(ctx, importer);
 // ======================== 加载模型并恢复持久化数据 ========================
 loadAllModels()
   .then(async function(instances) {
-    dataHandler.objects.cube = instances[0];
+    dataHandler.objects.cube = instances[0]; 
     var allBox = new THREE.Box3().setFromObject(scene);
     var size = allBox.getSize(new THREE.Vector3());
     var center = allBox.getCenter(new THREE.Vector3());
@@ -118,9 +111,9 @@ function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
-    try { var data = JSON.parse(event.data); applyDataToModels(data); }
-    catch(e) { console.error(e); }
-  };
+  try { var data = JSON.parse(event.data); dataHandler.process(data); }
+  catch(e) { console.error(e); }
+  };  
   ws.onclose = function() {
     ui.updateInfo("\u26d4 \u8fde\u63a5\u65ad\u5f00\uff0c\u6b63\u5728\u91cd\u8fde...", "rgba(200,0,0,0.7)");
     setTimeout(connectWebSocket, 3000);
