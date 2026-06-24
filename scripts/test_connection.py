@@ -1,11 +1,11 @@
-\"\"\"
+"""
 连接测试脚本
 用法: python scripts/test_connection.py [--plant] [--ws]
 
 测试项:
   --plant  测试与 PlantSimulation 的 TCP 连接
   --ws     测试 WebSocket 服务器是否在线
-\"\"\"
+"""
 import argparse
 import socket
 import json

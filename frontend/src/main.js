@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { createScene } from "./scene.js";
-import { createDefaultDevice, loadGLTFModel, loadDXFModel } from "./models.js";
+import { loadGLTFModel, loadDXFModel } from "./models.js";
 import { DataHandler } from "./data_handler.js";
 import { setupUI } from "./ui.js";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
@@ -43,17 +43,10 @@ axisRenderer.domElement.style.pointerEvents = "none"; axisRenderer.domElement.st
 axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
-// ======================== DataHandler 占位对象 ========================
-const _placeholder = createDefaultDevice(scene, { label: "" });
-_placeholder.visible = false;
-const dataHandler = new DataHandler({
-  allModelInstances: allModelInstances,   // 模型
-  updateInfo: ui.updateInfo               // 状态栏
-});
-
-// ======================== 加载初始模型（含 DXF 布局图）=======================
+// ======================== 全局状态 ========================
 const allModelInstances = [];
 
+// ======================== 加载初始模型（含 DXF 布局图）=======================
 async function loadAllModels() {
   // --- GLTF/GLB 设备模型 ---
   const configs = [
@@ -65,45 +58,25 @@ async function loadAllModels() {
     for (let i = 0; i < cfg.count; i++) {
       const lbl = cfg.count > 1 ? cfg.label + " #" + (i + 1) : cfg.label;
       const model = await loadGLTFModel(scene, cfg.url, { label: lbl, rotateX: -Math.PI / 2, position: cfg.positions[i], labelOffset: 3 });
-      model.userData.id = lbl;  // 设备 ID（后续通过 dataHandler.objects.cube 访问）
+      // 打印一个组装工位的模型结构
+      if (cfg.label === "组装工位" && i === 0) {
+        console.log("组装工位模型结构:", model.children);
+      }
+      model.userData.id = lbl;
       allModelInstances.push(model);
     }
   }
 
   // --- DXF 产线布局图 ---
-  try {
-    console.time("DXF load");
-    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 10], scale: 0.001 });
-    console.timeEnd("DXF load");
-    if (layout) allModelInstances.push(layout);
-  } catch(e) { console.warn("DXF layout load failed:", e); }
+  // try {
+  //   console.time("DXF load");
+  //   const layout = await loadDXFModel(scene, "/models/layout_simplified.dxf", { position: [0, 0, 10], scale: 0.001 });
+  //   console.timeEnd("DXF load");
+  //   if (layout) allModelInstances.push(layout);
+  // } catch(e) { console.warn("DXF layout load failed:", e); }
+
   return allModelInstances;
 }
-
-// ======================== 数据驱动所有模型 ========================
-// ======================== 初始化各模块 ========================
-const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
-const importer = initImporter(ctx);
-const interaction = initInteraction(ctx, importer);
-
-// ======================== 加载模型并恢复持久化数据 ========================
-loadAllModels()
-  .then(async function(instances) {
-    dataHandler.objects.cube = instances[0]; 
-    var allBox = new THREE.Box3().setFromObject(scene);
-    var size = allBox.getSize(new THREE.Vector3());
-    var center = allBox.getCenter(new THREE.Vector3());
-    var maxDim = Math.max(size.x, size.y, size.z);
-    console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
-    var dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
-    camera.position.set(dist * 0.6, dist * 0.6, dist);
-    controls.target.copy(center);
-    controls.update();
-    importer.saveDefaultTransforms();  // 保存当前位置为默认值（复位用）
-    importer.loadPositions();  // 恢复之前保存的变换状态
-    console.log("All models loaded:", instances.length);
-  })
-  .catch(function(e) { console.warn("Model loading failed:", e); });
 
 // ======================== WebSocket 数据通信 ========================
 let ws;
@@ -125,8 +98,6 @@ function sendCommand(msg) {
   else { alert("WebSocket \u672a\u8fde\u63a5"); }
 }
 
-// ======================== UI 绑定 ========================
-
 // ======================== 标签显隐切换 ========================
 let _labelsVisible = true;
 function toggleLabels() {
@@ -143,8 +114,41 @@ function toggleLabels() {
   });
 }
 
+// ======================== 初始化 importer / UI / dataHandler ========================
+const importerCtx = { scene, camera, controls, allModelInstances };
+const importer = initImporter(importerCtx);
+
 const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions, onToggleLabels: toggleLabels });
+
+const dataHandler = new DataHandler({
+  allModelInstances: allModelInstances,
+  updateInfo: ui.updateInfo
+});
+
 connectWebSocket();
+
+// ======================== 初始化其他模块 ========================
+const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
+const interaction = initInteraction(ctx, importer);
+
+// ======================== 加载模型并恢复持久化数据 ========================
+loadAllModels()
+  .then(async function(instances) {
+    dataHandler.objects.cube = instances[0]; 
+    var allBox = new THREE.Box3().setFromObject(scene);
+    var size = allBox.getSize(new THREE.Vector3());
+    var center = allBox.getCenter(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z);
+    console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
+    var dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
+    camera.position.set(dist * 0.6, dist * 0.6, dist);
+    controls.target.copy(center);
+    controls.update();
+    importer.saveDefaultTransforms();  // 保存当前位置为默认值（复位用）
+    importer.loadPositions();  // 恢复之前保存的变换状态
+    console.log("All models loaded:", instances.length);
+  })
+  .catch(function(e) { console.warn("Model loading failed:", e); });
 
 // ======================== 全局错误捕获（控制台显示在 #info）========================
 window.addEventListener("error", function(e) {
