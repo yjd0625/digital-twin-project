@@ -1,100 +1,37 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-/**
- * 创建或加载 3D 设备对象
- */
-
-// 创建一个默认的立方体设备（无 GLTF 模型时的回退）
-export function createDefaultDevice(scene, options = {}) {
-  const {
-    color = 0x00aaff,
-    emissive = 0x004466,
-    position = [0, 0, 0],
-    label = 'Device #1',
-  } = options;
-
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshStandardMaterial({
-    color,
-    emissive,
-    roughness: 0.3,
-    metalness: 0.1,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true;
-  mesh.position.set(...position);
-  scene.add(mesh);
-
-  // 标签（label 为空或未传则不创建）
-  if (label) {
-    const div = document.createElement("div");
-    div.textContent = label;
-    div.style.color = "white";
-    div.style.fontFamily = "Arial, sans-serif";
-    div.style.fontSize = "16px";
-    div.style.fontWeight = "bold";
-    div.style.textShadow = "1px 1px 3px rgba(0,0,0,0.8)";
-    div.style.background = "rgba(0,0,0,0.5)";
-    div.style.padding = "4px 12px";
-    div.style.borderRadius = "12px";
-    div.style.border = "1px solid #00aaff";
-    const labelObj = new CSS2DObject(div);
-    labelObj.position.set(0, 0.8, 0);
-    mesh.add(labelObj);
-  }
-
-  return mesh;
-}
+// ======================== 位置 / 标签 / 阴影通用逻辑 ========================
 
 /**
- * 通过 GLTF/GLB 文件加载模型，自动缩放并居中
- * @param {THREE.Scene} scene
- * @param {string} url   模型 URL（如 /models/assembleStation.glb）
- * @param {object} options
- * @param {number[]} options.position  平移位置
- * @param {number}  options.scale      缩放倍率（默认自适应）
- * @param {string}  options.label      设备标签
- * @returns {Promise<THREE.Group>}
+ * 对已加载的模型对象应用位置、旋转、标签、阴影等实例级参数
+ * @param {THREE.Group} model - 已加载的 GLTF 场景根节点
+ * @param {object} options  - position/rotateX/label/labelOffset/scale/autoAlignGround
+ * @returns {THREE.Group}
  */
-export async function loadGLTFModel(scene, url, options = {}) {
-  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync(url);
-  const model = gltf.scene;
-
-  // 缩放
+function setupModelInstance(model, options) {
+  // 1. 缩放
   const scale = options.scale ?? 1;
   if (scale !== 1) model.scale.set(scale, scale, scale);
 
-  // 修正朝向（例如 Z-up 旋转到 Y-up）
+  // 2. 旋转（支持更多轴向）
   if (options.rotateX) model.rotation.x = options.rotateX;
-  // 如有需要可添加 rotateY, rotateZ
+
   model.updateMatrixWorld(true);
 
-  // 计算变换后的包围盒
+  // 3. 计算局部包围盒，用于位置对齐（居中、落地的核心计算）
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
   const minY = box.min.y;
-
-  // 用户传入的位置（默认 [0,0,0]）
   const pos = options.position ?? [0, 0, 0];
-  // 是否自动对齐地面（默认 true）
   const autoAlignGround = options.autoAlignGround !== undefined ? options.autoAlignGround : true;
-
-  let yOffset;
-  if (autoAlignGround) {
-    // 底座对齐到 pos[1] 高度（通常为0）
-    yOffset = pos[1] - minY;
-  } else {
-    // 原居中逻辑：模型中心对齐到 pos[1]
-    yOffset = pos[1] - center.y;
-  }
-  // 设置位置（x, z 保持中心对齐，y 取决于对齐模式）
+  const yOffset = autoAlignGround ? pos[1] - minY : pos[1] - center.y;
   model.position.set(pos[0] - center.x, yOffset, pos[2] - center.z);
 
-  // 添加标签（CSS2DObject）
+  // 位置变更后再次更新矩阵，使世界包围盒准确
+  model.updateMatrixWorld(true);
+
+  // 4. 添加标签（CSS2DObject）
   if (options.label) {
     const div = document.createElement("div");
     div.textContent = options.label;
@@ -107,22 +44,70 @@ export async function loadGLTFModel(scene, url, options = {}) {
     div.style.padding = "4px 12px";
     div.style.borderRadius = "12px";
     div.style.border = "1px solid #00aaff";
+
     const labelObj = new CSS2DObject(div);
-    // 标签偏移：默认在模型顶部上方 0.5 单位，可由 labelOffset 覆盖
-    const labelOffset = options.labelOffset ?? (size.y / 2 + 0.5);
-    labelObj.position.set(0, 0, labelOffset);
+    const labelOffset = options.labelOffset ?? 0.5;
+
+    // 获取模型在世界空间中的包围盒
+    const worldBox = new THREE.Box3().setFromObject(model);
+    const worldTopCenter = new THREE.Vector3(
+      (worldBox.min.x + worldBox.max.x) / 2,
+      worldBox.max.y,               // 世界坐标系下的最高点
+      (worldBox.min.z + worldBox.max.z) / 2
+    );
+    worldTopCenter.y += 0.5;
+    model.worldToLocal(worldTopCenter);
+    labelObj.position.copy(worldTopCenter);
+
     model.add(labelObj);
   }
 
-  // 启用阴影
-  model.traverse((child) => {
+  // 5. 启用阴影
+  model.traverse(function(child) {
     if (child.isMesh) {
       child.castShadow = true;
       child.receiveShadow = true;
     }
   });
 
-  scene.add(model);
+  return model;
+}
+
+/** GLTF 加载器工厂（动态 import 避免主包体积膨胀） */
+async function createGLTFLoader() {
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
+  const { DRACOLoader } = await import('three/addons/loaders/DRACOLoader.js');
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('/draco/');
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.setDRACOLoader(dracoLoader);
+
+  return loader;
+}
+
+/**
+ * 加载 GLTF/GLB 文件并返回原始场景根节点（不带实例级设置），
+ * 适合需要多次 .clone() 的批量实例化场景
+ * @param {string} url  模型 URL
+ * @returns {Promise<THREE.Group>} 原始 GLTF scene，可多次 .clone()
+ */
+export async function loadGLTFTemplate(url) {
+  const loader = await createGLTFLoader();
+  const gltf = await loader.loadAsync(url);
+  return gltf.scene;
+}
+
+/**
+ * 从模板克隆并创建模型实例，应用位置/旋转/标签/阴影等实例级参数
+ * @param {THREE.Group} template   - loadGLTFTemplate 返回的原始模型
+ * @param {object}      options    - position/rotateX/label/labelOffset/scale
+ * @returns {THREE.Group} 已设置好的新实例（未加入 scene，需调用者 add）
+ */
+export function createInstanceFromTemplate(template, options) {
+  const model = template.clone();             // 深度克隆，共享 geometry/material
+  setupModelInstance(model, options);         // 应用实例级参数
   return model;
 }
 
@@ -179,7 +164,6 @@ export async function loadDXFModel(scene, url, options = {}) {
   var size = box.getSize(new THREE.Vector3());
   var pos = options.position || [0, 0, 0];
   group.position.set(pos[0] - center.x, pos[1] - box.min.y, pos[2] - center.z);
-  console.log("DXF bounding box:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1), "scale:", sc);
 
   // 图纸旋转：DXF 是 XY 平面，平铺到 XZ 地面
   group.rotation.x = -(options.rotateX || Math.PI / 2);
@@ -192,5 +176,6 @@ export async function loadDXFModel(scene, url, options = {}) {
   }
 
   scene.add(group);
+
   return group;
 }
