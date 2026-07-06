@@ -118,7 +118,7 @@ function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
-  try { var data = JSON.parse(event.data); dataHandler.process(data); }
+  try { const data = JSON.parse(event.data); dataHandler.process(data); }
   catch(e) { console.error(e); }
   };
   ws.onclose = function() {
@@ -136,7 +136,7 @@ function sendCommand(msg) {
 let _labelsVisible = true;
 function toggleLabels() {
   _labelsVisible = !_labelsVisible;
-  var btn = document.getElementById('btn-labels');
+  const btn = document.getElementById("btn-labels");
   if (btn) btn.textContent = _labelsVisible ? '隐藏标签' : '显示标签';
   allModelInstances.forEach(function(m) {
     m.traverse(function(ch) {
@@ -169,12 +169,12 @@ const interaction = initInteraction(ctx, importer);
 loadAllModels()
   .then(async function(instances) {
     dataHandler.objects.cube = instances[0];
-    var allBox = new THREE.Box3().setFromObject(scene);
-    var size = allBox.getSize(new THREE.Vector3());
-    var center = allBox.getCenter(new THREE.Vector3());
-    var maxDim = Math.max(size.x, size.y, size.z);
+    const allBox = new THREE.Box3().setFromObject(scene);
+    const size = allBox.getSize(new THREE.Vector3());
+    const center = allBox.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
     console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
-    var dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
+    const dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.copy(center);
     controls.update();
@@ -186,25 +186,27 @@ loadAllModels()
 
 // ======================== 全局错误捕获（控制台显示在 #info）========================
 window.addEventListener("error", function(e) {
-  var info = document.getElementById("info");
+  const info = document.getElementById("info");
   if (info) { info.textContent = "JS Error: " + (e.message || e.error); info.style.background = "rgba(200,0,0,0.8)"; }
   console.error("Global error:", e);
 });
 
 // ======================== 窗口尺寸自适应 ========================
 window.addEventListener("resize", function() {
-  var w = container.clientWidth || window.innerWidth;
-  var h = container.clientHeight || window.innerHeight;
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
 });
 
 // ======================== 主渲染循环 ========================
 const _offset = new THREE.Vector3();
+const _clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
+  const delta = _clock.getDelta();
   controls.update();
-  importer.updateViewTransition();
+  importer.updateViewTransition(delta);
   _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
   axisCam.position.copy(_offset); axisCam.lookAt(0, 0, 0);
   renderer.render(scene, camera);

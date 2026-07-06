@@ -40,7 +40,7 @@ class WebSocketHandler:
         if not self._connections:
             return
         message = json.dumps(data, ensure_ascii=False)
-        tasks = [ws.send(message) for ws in self._connections]
+        tasks = [ws.send(message) for ws in list(self._connections)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for i, r in enumerate(results):
             if isinstance(r, Exception):
