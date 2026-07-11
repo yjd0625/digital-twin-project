@@ -9,7 +9,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
-export const USE_OUTLINE = true;  // 轮廓高亮开关
+export const USE_OUTLINE = false;  // 轮廓高亮开关
 /**
  * 创建 Three.js 场景、相机、灯光、控制器
  * @param {HTMLElement} container - 挂载容器的 DOM 元素

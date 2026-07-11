@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数字孪生技术选型对比</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --bg-soft: #eef1f8;
+    --surface: #ffffff;
+    --ink: #1b2233;
+    --ink-soft: #5a6478;
+    --line: #e4e8f2;
+    --shadow: 0 1px 2px rgba(20,30,60,.04), 0 8px 24px rgba(20,30,60,.06);
+    --shadow-lg: 0 4px 12px rgba(20,30,60,.08), 0 18px 48px rgba(20,30,60,.10);
+
+    --c-front: #2563eb;   /* 前端可视化层 */
+    --c-back:  #0d9488;   /* 后端服务层 */
+    --c-comm:  #7c3aed;   /* 数据通信层 */
+    --c-data:  #ea580c;   /* 数据存储层 */
+    --c-sim:   #db2777;   /* 仿真验证层 */
+
+    --pro: #16a34a;
+    --con: #dc2626;
+    --star: #f59e0b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- Top nav ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1180px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .brand .dot {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    display: grid; place-items: center; color: #fff; font-size: 14px;
+  }
+  .nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .nav a {
+    font-size: 13px; color: var(--ink-soft); padding: 7px 12px; border-radius: 999px;
+    transition: .18s; white-space: nowrap;
+  }
+  .nav a:hover { background: var(--bg-soft); color: var(--ink); }
+  .nav a.active { background: var(--ink); color: #fff; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    max-width: 1180px; margin: 0 auto; padding: 64px 24px 40px;
+    text-align: center;
+  }
+  .hero .eyebrow {
+    display: inline-block; font-size: 12px; letter-spacing: .14em; font-weight: 700;
+    color: var(--c-front); background: #e8f0ff; padding: 6px 14px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .hero h1 { font-size: clamp(28px, 5vw, 46px); line-height: 1.2; font-weight: 800; letter-spacing: -.01em; }
+  .hero p { max-width: 720px; margin: 18px auto 0; color: var(--ink-soft); font-size: 16px; }
+  .hero .stats { display: flex; justify-content: center; gap: 36px; margin-top: 34px; flex-wrap: wrap; }
+  .hero .stats div { text-align: center; }
+  .hero .stats b { display: block; font-size: 30px; font-weight: 800; }
+  .hero .stats span { font-size: 13px; color: var(--ink-soft); }
+
+  /* ---------- Layer section ---------- */
+  .layer { max-width: 1180px; margin: 0 auto; padding: 40px 24px; scroll-margin-top: 72px; }
+  .layer-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 26px; }
+  .layer-no {
+    flex: none; width: 46px; height: 46px; border-radius: 12px; color: #fff;
+    display: grid; place-items: center; font-weight: 800; font-size: 18px;
+  }
+  .layer-head h2 { font-size: 24px; font-weight: 800; }
+  .layer-head .sub { color: var(--ink-soft); font-size: 14px; margin-top: 2px; }
+  .layer-head .tagline { color: var(--ink-soft); font-size: 14px; margin-top: 4px; }
+
+  /* ---------- Cards ---------- */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 24px; box-shadow: var(--shadow); transition: .2s;
+    border-top: 4px solid var(--accent, var(--c-front));
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+
+  /* header row: name | role | tag */
+  .card-head { display: flex; align-items: center; gap: 16px; }
+  .c-name { flex: none; font-size: 19px; font-weight: 800; white-space: nowrap; }
+  .c-role {
+    flex: 1; margin: 0; min-width: 0; font-size: 13.5px; color: var(--ink-soft);
+    padding-left: 12px; border-left: 3px solid var(--accent, var(--c-front));
+  }
+  .c-tag {
+    flex: none; font-size: 11px; font-weight: 700; color: var(--accent, var(--c-front));
+    background: color-mix(in srgb, var(--accent, var(--c-front)) 10%, #fff);
+    padding: 5px 12px; border-radius: 999px; white-space: nowrap;
+  }
+
+  /* body: pros | cons, each half */
+  .c-body { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .c-pros, .c-cons { min-width: 0; }
+
+  .label { font-size: 12px; font-weight: 700; letter-spacing: .04em; margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+  .label.pro { color: var(--pro); }
+  .label.con { color: var(--con); }
+  ul.list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  ul.list li { font-size: 13.5px; color: var(--ink); padding-left: 24px; position: relative; }
+  ul.list.pro li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--pro); font-weight: 700; }
+  ul.list.con li::before { content: "✕"; position: absolute; left: 0; top: 0; color: var(--con); font-weight: 700; }
+
+  /* footer metrics: label left, stars right */
+  .c-foot {
+    display: flex; flex-wrap: wrap; gap: 10px 36px;
+    border-top: 1px dashed var(--line); padding-top: 14px;
+  }
+  .metric-row { display: flex; align-items: center; gap: 8px; }
+  .m-label { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .stars { color: var(--star); letter-spacing: 2px; font-size: 14px; flex: none; }
+  .stars .empty { color: #d4d9e4; }
+
+  /* ---------- Summary table ---------- */
+  .summary { max-width: 1180px; margin: 0 auto; padding: 40px 24px 72px; }
+  .summary h2 { font-size: 26px; font-weight: 800; text-align: center; margin-bottom: 6px; }
+  .summary .lead { text-align: center; color: var(--ink-soft); margin-bottom: 28px; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    background: var(--bg-soft); text-align: left; padding: 13px 16px; font-weight: 700; color: var(--ink);
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  tbody td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbff; }
+  .tname { font-weight: 700; }
+  .tlayer { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .reco { font-size: 13px; color: var(--ink-soft); }
+
+  footer { text-align: center; padding: 30px 24px 48px; color: var(--ink-soft); font-size: 12.5px; }
+
+  @media (max-width: 640px) {
+    .nav { display: none; }
+    .hero { padding-top: 44px; }
+    .grid { grid-template-columns: 1fr; }
+    .card-head { flex-wrap: wrap; }
+    .c-role { flex-basis: 100%; border-left: none; padding-left: 0; }
+    .c-body { grid-template-columns: 1fr; gap: 14px; }
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 720px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="dot">◈</span> 数字孪生技术选型</div>
+    <nav class="nav">
+      <a href="#layer-1">前端可视化层</a>
+      <a href="#layer-2">后端服务层</a>
+      <a href="#layer-3">数据通信层</a>
+      <a href="#layer-4">数据存储层</a>
+      <a href="#layer-5">仿真验证层</a>
+      <a href="#summary">速查表</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="eyebrow">DIGITAL TWIN · TECH STACK</span>
+  <h1>数字孪生技术选型对比总结</h1>
+  <p>从前端可视化、后端服务、数据通信、数据存储到仿真验证，五大技术层、12 项核心技术的优劣势、开发难度与扩展性一览，辅助架构决策。</p>
+  <div class="stats">
+    <div><b>5</b><span>技术分层</span></div>
+    <div><b>12</b><span>核心技术</span></div>
+    <div><b>2</b><span>评估维度（难度 / 扩展性）</span></div>
+  </div>
+</section>
+
+<!-- ============ Layer 1 ============ -->
+<section class="layer" id="layer-1" style="--accent: var(--c-front);">
+  <div class="layer-head">
+    <div class="layer-no" style="background: var(--c-front);">1</div>
+    <div>
+      <h2>前端可视化层（3D 渲染与交互）</h2>
+      <div class="tagline">负责将数据转化为可视化的三维场景，分为 Web 端引擎与原生 / 重型引擎两大流派。</div>
+    </div>
+  </div>
+  <div class="grid">
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Three.js</h3>
+        <p class="c-role">基于 WebGL 的轻量级 3D 库，需搭配 Vue / React 构建完整前端。</p>
+        <span class="c-tag">Web 端引擎</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>真正的零部署，浏览器输入 URL 即用</li>
+            <li>前端生态极强，与后台管理系统无缝集成</li>
+            <li>热更新无感，社区极其活跃</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>原生不支持复杂物理碰撞和流体仿真</li>
+            <li>处理超大模型（&gt;50 万面）时需手动深度优化，否则卡顿</li>
+            <li>画质上限受限于浏览器</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="2" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="3" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Babylon.js</h3>
+        <p class="c-role">微软开源的 Web 端重型 3D 引擎，同样基于 WebGL / WebGPU。</p>
+        <span class="c-tag">Web 端重型</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>Web 端画质天花板，原生支持 PBR 材质、环境光遮蔽和内置物理引擎</li>
+            <li>工具链完整（含 GUI 编辑器）</li>
+            <li>性能优于 Three.js</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>学习曲线陡峭，中文文档和社区资源远少于 Three.js</li>
+            <li>开发周期较长</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="4" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="4" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Unity</h3>
+        <p class="c-role">跨平台的独立客户端引擎，支持 PC、移动端及 VR / AR（含 C# / .NET）。</p>
+        <span class="c-tag">原生 / 跨平台</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>性能与画质的黄金平衡点</li>
+            <li>物理引擎极为成熟（NVIDIA PhysX）</li>
+            <li>可编译为 WebGL（体量较大）；C# 语言相对友好</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>部署笨重，需下载数百 MB 安装包，更新需重新下载安装</li>
+            <li>与 Web 后端及工业协议（OPC UA）对接需额外编写原生插件或网络通信层，集成成本高</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="4" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="5" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Unreal Engine（UE5）</h3>
+        <p class="c-role">顶级影视级独立引擎，侧重极致渲染效果。</p>
+        <span class="c-tag">影视级重型</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>画质天花板，Nanite 几何体技术可处理数十亿面的超精细模型</li>
+            <li>Lumen 动态全局光照极逼真</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>部署困难：通常依赖 Pixel Streaming 串流，每并发用户需占用独立昂贵 GPU 实例</li>
+            <li>C++ 门槛极高；对硬件要求苛刻</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="5" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="2" data-max="5"></span></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ Layer 2 ============ -->
+<section class="layer" id="layer-2" style="--accent: var(--c-back);">
+  <div class="layer-head">
+    <div class="layer-no" style="background: var(--c-back);">2</div>
+    <div>
+      <h2>后端服务层（业务逻辑与 API）</h2>
+      <div class="tagline">负责数据处理、接口暴露和通信管理。</div>
+    </div>
+  </div>
+  <div class="grid">
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Python</h3>
+        <p class="c-role">动态脚本语言，聚焦快速开发与数据分析。</p>
+        <span class="c-tag">FastAPI / Django</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>胶水特性，与 AI / ML 库（Pandas、NumPy）无缝衔接</li>
+            <li>异步框架（FastAPI）性能优秀，开发效率比 Java 高 3–5 倍</li>
+            <li>后期数据分析拓展能力强</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>全局解释器锁（GIL）限制 CPU 密集型并行计算</li>
+            <li>弱类型在大型项目中易导致维护混乱</li>
+            <li>超高并发（&gt;5000 req/s）下表现逊于 Java</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="2" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="3" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Java</h3>
+        <p class="c-role">静态编译型语言，面向大型企业级分布式系统。</p>
+        <span class="c-tag">Spring Boot</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>极致性能与稳定性，高并发处理能力极强</li>
+            <li>强类型系统配合 IDE 让重构和大型团队协作非常稳健</li>
+            <li>生态极其庞大（微服务、消息队列、事务管理）</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>代码臃肿冗长，开发慢，迭代周期长</li>
+            <li>内存占用高</li>
+            <li>做数据分析或 AI 集成需要额外调用 Python 服务</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="4" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="5" data-max="5"></span></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ Layer 3 ============ -->
+<section class="layer" id="layer-3" style="--accent: var(--c-comm);">
+  <div class="layer-head">
+    <div class="layer-no" style="background: var(--c-comm);">3</div>
+    <div>
+      <h2>数据通信与接入层（OT / IT 互联）</h2>
+      <div class="tagline">负责打通物理设备与 IT 系统的“神经系统”。</div>
+    </div>
+  </div>
+  <div class="grid">
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">OPC UA</h3>
+        <p class="c-role">工业 4.0 标准通信协议，基于 C/S 和 Pub/Sub 模型。</p>
+        <span class="c-tag">工业 4.0 标准</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>自带标准信息模型，连接设备后数据结构自动映射（无需手写 JSON 解析）</li>
+            <li>内置强大的加密、认证和会话管理，企业级安全开箱即用</li>
+            <li>支持历史数据访问和方法调用</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>协议体量大，SDK 配置复杂（需处理证书、防火墙端口）</li>
+            <li>弱网环境下重连机制编写麻烦</li>
+            <li>完全实现规范开销较大</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="3" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="5" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">MQTT</h3>
+        <p class="c-role">轻量级物联网消息传输协议，基于发布 / 订阅模式。</p>
+        <span class="c-tag">物联网轻量</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>协议极轻量，头部仅 2 字节，带宽占用极小</li>
+            <li>跨网穿透能力强，适合设备上云或公网传输</li>
+            <li>中间件（Broker）部署极为简单（如 EMQX）</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>数据无结构，必须自定义 Topic 和 Payload，设备变动需频繁升级解析代码</li>
+            <li>安全性依赖外挂 TLS，配置复杂</li>
+            <li>传输可靠性（QoS）实现不如 OPC UA 标准统一</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="1" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="2" data-max="5"></span></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ Layer 4 ============ -->
+<section class="layer" id="layer-4" style="--accent: var(--c-data);">
+  <div class="layer-head">
+    <div class="layer-no" style="background: var(--c-data);">4</div>
+    <div>
+      <h2>数据存储层（数据库选型）</h2>
+      <div class="tagline">负责存储设备历史数据和缓存实时状态。</div>
+    </div>
+  </div>
+  <div class="grid">
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">InfluxDB</h3>
+        <p class="c-role">开源时序数据库的事实标准。</p>
+        <span class="c-tag">时序数据库</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>生态极成熟，与 Grafana 监控看板无缝集成</li>
+            <li>类 SQL 查询语言（Flux / InfluxQL）上手快</li>
+            <li>数据压缩率高</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>开源版（OSS）不支持集群，高可用需购买商业版（InfluxDB Enterprise）</li>
+            <li>单机版写入瓶颈约每秒数十万点位</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="2" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="2" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">TDengine</h3>
+        <p class="c-role">国产高性能分布式时序数据库。</p>
+        <span class="c-tag">国产分布式</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>集群版完全开源免费，写入性能是 InfluxDB 的 2 倍以上</li>
+            <li>原生支持标准 SQL（JDBC / ODBC），与现有数据栈融合简单</li>
+            <li>超级表机制非常适合处理工业传感器数据</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>独特的标签 / 列模型需要学习成本</li>
+            <li>周边生态（数据迁移、可视化插件）不如 InfluxDB 丰富</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="3" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="5" data-max="5"></span></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Redis</h3>
+        <p class="c-role">内存中的键值对缓存数据库。</p>
+        <span class="c-tag">缓存层</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>亚毫秒级读写，用于存储最新设备实时值（Key: 设备 ID，Value: JSON 结构）</li>
+            <li>极大减轻后端查询时序库的压力</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>数据易失（依赖断电备份策略）</li>
+            <li>无法做复杂历史查询</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="1" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="5" data-max="5"></span></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ Layer 5 ============ -->
+<section class="layer" id="layer-5" style="--accent: var(--c-sim);">
+  <div class="layer-head">
+    <div class="layer-no" style="background: var(--c-sim);">5</div>
+    <div>
+      <h2>仿真与验证层（特定软件角色）</h2>
+      <div class="tagline">Plant Simulation 在架构中是一个独立的离线分析工具。</div>
+    </div>
+  </div>
+  <div class="grid">
+
+    <article class="card">
+      <div class="card-head">
+        <h3 class="c-name">Plant Simulation</h3>
+        <p class="c-role">面向对象的离散事件仿真工具，专注物流优化、产线产能瓶颈分析和节拍验算。</p>
+        <span class="c-tag">离散事件仿真</span>
+      </div>
+      <div class="c-body">
+        <div class="c-pros">
+          <div class="label pro">优点</div>
+          <ul class="list pro">
+            <li>与物理设备完全隔离，风险极低</li>
+            <li>运行速度可调（加速仿真数天产能）</li>
+            <li>与 Python 和 OPC UA 均有标准接口（Socket / ODBC / OPC DA）</li>
+          </ul>
+        </div>
+        <div class="c-cons">
+          <div class="label con">缺点</div>
+          <ul class="list con">
+            <li>不具备实时控制能力</li>
+            <li>渲染效果简陋</li>
+            <li>授权费用昂贵</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-foot">
+        <div class="metric-row"><span class="m-label">开发难度</span><span class="stars" data-value="3" data-max="5"></span></div>
+        <div class="metric-row"><span class="m-label">扩展性</span><span class="stars" data-value="2" data-max="5"></span></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ Summary ============ -->
+<section class="summary" id="summary">
+  <h2>选型速查表</h2>
+  <p class="lead">一眼对比各技术的开发难度与扩展性，辅以选型建议。</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>技术</th><th>所属层</th><th>功能定位</th><th>开发难度</th><th>扩展性</th><th>选型建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="tname">Three.js</td>
+          <td><span class="tlayer" style="background:#e8f0ff;color:var(--c-front)">前端</span></td>
+          <td>WebGL 轻量 3D 库</td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="stars" data-value="3" data-max="5"></td>
+          <td class="reco">快速落地、轻量 Web 三维，需自行优化大模型</td>
+        </tr>
+        <tr>
+          <td class="tname">Babylon.js</td>
+          <td><span class="tlayer" style="background:#e8f0ff;color:var(--c-front)">前端</span></td>
+          <td>Web 端重型引擎</td>
+          <td class="stars" data-value="4" data-max="5"></td>
+          <td class="stars" data-value="4" data-max="5"></td>
+          <td class="reco">追求 Web 端画质与内置物理，愿投入学习成本</td>
+        </tr>
+        <tr>
+          <td class="tname">Unity</td>
+          <td><span class="tlayer" style="background:#e8f0ff;color:var(--c-front)">前端</span></td>
+          <td>跨平台独立引擎</td>
+          <td class="stars" data-value="4" data-max="5"></td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="reco">需 VR/AR 或高性能客户端，可接受部署重量</td>
+        </tr>
+        <tr>
+          <td class="tname">Unreal Engine</td>
+          <td><span class="tlayer" style="background:#e8f0ff;color:var(--c-front)">前端</span></td>
+          <td>影视级引擎</td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="reco">极致画质 + 串流架构，预算充足且并发可控</td>
+        </tr>
+        <tr>
+          <td class="tname">Python</td>
+          <td><span class="tlayer" style="background:#e0f7f4;color:var(--c-back)">后端</span></td>
+          <td>快速开发 / 数据分析</td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="stars" data-value="3" data-max="5"></td>
+          <td class="reco">AI/ML 联动、快速原型，规避超高并发</td>
+        </tr>
+        <tr>
+          <td class="tname">Java</td>
+          <td><span class="tlayer" style="background:#e0f7f4;color:var(--c-back)">后端</span></td>
+          <td>企业级分布式</td>
+          <td class="stars" data-value="4" data-max="5"></td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="reco">高并发、大型团队协作、微服务架构</td>
+        </tr>
+        <tr>
+          <td class="tname">OPC UA</td>
+          <td><span class="tlayer" style="background:#f1e9fe;color:var(--c-comm)">通信</span></td>
+          <td>工业标准协议</td>
+          <td class="stars" data-value="3" data-max="5"></td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="reco">厂内设备标准化接入，重安全与建模</td>
+        </tr>
+        <tr>
+          <td class="tname">MQTT</td>
+          <td><span class="tlayer" style="background:#f1e9fe;color:var(--c-comm)">通信</span></td>
+          <td>轻量物联网</td>
+          <td class="stars" data-value="1" data-max="5"></td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="reco">设备上云 / 公网穿透，需自行约定数据结构</td>
+        </tr>
+        <tr>
+          <td class="tname">InfluxDB</td>
+          <td><span class="tlayer" style="background:#fdeede;color:var(--c-data)">存储</span></td>
+          <td>时序数据库</td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="reco">生态成熟、单机够用，高可用需付费</td>
+        </tr>
+        <tr>
+          <td class="tname">TDengine</td>
+          <td><span class="tlayer" style="background:#fdeede;color:var(--c-data)">存储</span></td>
+          <td>国产分布式时序</td>
+          <td class="stars" data-value="3" data-max="5"></td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="reco">海量写入、集群免费，愿学习标签模型</td>
+        </tr>
+        <tr>
+          <td class="tname">Redis</td>
+          <td><span class="tlayer" style="background:#fdeede;color:var(--c-data)">存储</span></td>
+          <td>内存缓存</td>
+          <td class="stars" data-value="1" data-max="5"></td>
+          <td class="stars" data-value="5" data-max="5"></td>
+          <td class="reco">实时值缓存，减压时序库，非历史存储</td>
+        </tr>
+        <tr>
+          <td class="tname">Plant Simulation</td>
+          <td><span class="tlayer" style="background:#fce4f1;color:var(--c-sim)">仿真</span></td>
+          <td>离散事件仿真</td>
+          <td class="stars" data-value="3" data-max="5"></td>
+          <td class="stars" data-value="2" data-max="5"></td>
+          <td class="reco">离线产能 / 瓶颈分析，非实时控制</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  数字孪生技术选型对比 · 内容基于技术评估总结整理 · 难度与扩展性为相对维度，实际选型请结合团队与业务场景
+</footer>
+
+<script>
+  // 渲染星级（实心 + 空心）
+  document.querySelectorAll('.stars').forEach(function (el) {
+    var v = parseInt(el.getAttribute('data-value'), 10);
+    var max = parseInt(el.getAttribute('data-max'), 10) || 5;
+    var html = '';
+    for (var i = 1; i <= max; i++) {
+      html += i <= v ? '★' : '<span class="empty">★</span>';
+    }
+    el.innerHTML = html;
+  });
+
+  // 导航滚动高亮
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  var sections = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var id = '#' + e.target.id;
+          links.forEach(function (l) { l.classList.toggle('active', l.getAttribute('href') === id); });
+        }
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    sections.forEach(function (s) { if (s) obs.observe(s); });
+  }
+</script>
+</body>
+</html>
