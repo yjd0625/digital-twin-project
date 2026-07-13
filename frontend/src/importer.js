@@ -92,10 +92,12 @@ export function initImporter(ctx) {
   // ======================== 默认变换管理（复位用）=======================
   let _defaultTransforms = null;
 
-  /** 保存当前所有模型的位置/旋转/缩放作为默认值（复位目标） */
+  /** 保存当前所有模型的位置/旋转/缩放作为默认值（复位目标）— 按 userData.id 存储 */
   function saveDefaultTransforms() {
-    _defaultTransforms = allModelInstances.map(function(m) {
-      return {
+    _defaultTransforms = {};
+    allModelInstances.forEach(function(m) {
+      const id = m.userData.id || "unknown";
+      _defaultTransforms[id] = {
         pos: { x: m.position.x, y: m.position.y, z: m.position.z },
         rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
         scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
@@ -103,16 +105,16 @@ export function initImporter(ctx) {
     });
   }
 
-  /** 恢复所有模型到保存的默认变换并持久化 */
+  /** 恢复所有模型到保存的默认变换并持久化 — 按 userData.id 匹配 */
   function resetPositions() {
     if (!_defaultTransforms) return;
-    allModelInstances.forEach(function(m, i) {
-      if (i < _defaultTransforms.length) {
-        const d = _defaultTransforms[i];
-        m.position.set(d.pos.x, d.pos.y, d.pos.z);
-        m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
-        m.scale.set(d.scl.x, d.scl.y, d.scl.z);
-      }
+    allModelInstances.forEach(function(m) {
+      const id = m.userData.id || "unknown";
+      const d = _defaultTransforms[id];
+      if (!d) return;
+      m.position.set(d.pos.x, d.pos.y, d.pos.z);
+      m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+      m.scale.set(d.scl.x, d.scl.y, d.scl.z);
     });
     savePositions();
   }
