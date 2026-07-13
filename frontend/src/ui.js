@@ -12,6 +12,15 @@ export function setupUI(controls, sendCommand, extra) {
     }
   }
 
+  // 线速度独立标签（不覆盖连接状态）
+  const speedDiv = document.getElementById('speed-info');
+  function updateSpeed(text, bg = 'rgba(0,0,0,0.7)') {
+    if (speedDiv) {
+      speedDiv.textContent = text;
+      speedDiv.style.background = bg;
+    }
+  }
+
   // 控制按钮
   document.getElementById('btn-start')?.addEventListener('click', () => {
     sendCommand('START');
@@ -36,5 +45,5 @@ export function setupUI(controls, sendCommand, extra) {
   // 标签显隐切换
   document.getElementById("btn-labels")?.addEventListener("click", () => extra?.onToggleLabels?.());
 
-  return { updateInfo };
+  return { updateInfo, updateSpeed };
 }
