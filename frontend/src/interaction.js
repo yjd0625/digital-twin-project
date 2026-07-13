@@ -133,7 +133,7 @@ export function initInteraction(ctx, importer, outlinePass) {
     if (action) {
       selectedObjects.forEach(action);
       updateSelectionBoxes();
-      importer.savePositions();
+      // 变换实时作用于对象本身；复位由 importer.resetPositions() 统一回退到默认基线，无需在此保存
     }
   });
 
@@ -173,7 +173,7 @@ export function initInteraction(ctx, importer, outlinePass) {
       let dz = pt.z - selectedObjects[0].position.z;
       selectedObjects.forEach(function(o) { o.position.x += dx; o.position.z += dz; });
       updateSelectionBoxes();
-      // 拖动中只更新显示，不写 localStorage；保存推迟到 pointerup（见 _pu2）
+      // 拖动中只更新显示；复位由 importer.resetPositions() 统一回退到默认基线，无需保存
     }
   });
 
@@ -181,7 +181,7 @@ export function initInteraction(ctx, importer, outlinePass) {
     if (isDragging) {
       isDragging = false;
       controls.enabled = true;
-      importer.savePositions(); // 拖拽结束后保存一次，避免拖动过程中频繁写 localStorage
+      // 变换实时作用于对象本身；复位由 importer.resetPositions() 统一回退到默认基线，无需在此保存
     }
   });
 

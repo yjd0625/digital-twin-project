@@ -1,7 +1,11 @@
 import * as THREE from "three";
 
 /**
- * 持久化模块 — 视角切换、位置/旋转/缩放变换持久化（localStorage）
+ * importer 模块 — 视角切换、位置/旋转/缩放复位（内存基线，无持久化）
+ *
+ * 设计：数字孪生前端是后端的实时镜像，设备/零件状态由后端下发，
+ * 前端不持久化任何变换状态。复位（reset）只需把每个节点恢复到
+ * 加载时的默认局部变换（来自 GLB 自身），基线存于内存 userData._default。
  */
 
 export function initImporter(ctx) {
@@ -42,81 +46,37 @@ export function initImporter(ctx) {
     _targetCamPos = null;
   }
 
-  // ======================== 变换状态持久化（localStorage）=======================
-  /** 保存所有模型的位置/旋转/缩放到 localStorage（按 userData.id 存储） */
-  function savePositions() {
-    const data = {};
-    allModelInstances.forEach(function(m) {
-      const id = m.userData.id || "unknown";
-      data[id] = {
-        pos: { x: m.position.x, y: m.position.y, z: m.position.z },
-        rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
-        scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
-      };
-    });
-    localStorage.setItem("dt_model_transforms", JSON.stringify(data));
-  }
-
-  /** 从 localStorage 恢复变换状态（按 userData.id 匹配，兼容旧版数组格式） */
-  function loadPositions() {
-    const raw = localStorage.getItem("dt_model_transforms");
-    if (!raw) return;
-    try {
-      const data = JSON.parse(raw);
-      // 兼容旧版数组格式
-      if (Array.isArray(data)) {
-        console.warn("loadPositions: 检测到旧版数组格式，按数组下标恢复");
-        allModelInstances.forEach(function(m, i) {
-          if (i < data.length && data[i].pos) {
-            m.position.set(data[i].pos.x, data[i].pos.y, data[i].pos.z);
-            if (data[i].rot) m.rotation.set(data[i].rot.x, data[i].rot.y, data[i].rot.z);
-            if (data[i].scl) m.scale.set(data[i].scl.x, data[i].scl.y, data[i].scl.z);
-          }
-        });
-        return;
-      }
-      // 新版对象格式：按 userData.id 匹配
-      allModelInstances.forEach(function(m) {
-        const id = m.userData.id || "unknown";
-        const entry = data[id];
-        if (!entry) return;
-        if (entry.pos) {
-          m.position.set(entry.pos.x, entry.pos.y, entry.pos.z);
-          if (entry.rot) m.rotation.set(entry.rot.x, entry.rot.y, entry.rot.z);
-          if (entry.scl) m.scale.set(entry.scl.x, entry.scl.y, entry.scl.z);
-        }
-      });
-    } catch(e) { console.warn("loadPositions error:", e); }
-  }
-
-  // ======================== 默认变换管理（复位用）=======================
-  let _defaultTransforms = null;
-
-  /** 保存当前所有模型的位置/旋转/缩放作为默认值（复位目标）— 按 userData.id 存储 */
+  // ======================== 默认变换管理（内存基线 + 复位）=======================
+  /**
+   * 捕获每个实例（含所有子 mesh/group/Object3D）的默认局部变换到 userData._default。
+   * 必须在模型刚加载、尚未被后端/用户改动时调用一次。
+   */
   function saveDefaultTransforms() {
-    _defaultTransforms = {};
-    allModelInstances.forEach(function(m) {
-      const id = m.userData.id || "unknown";
-      _defaultTransforms[id] = {
-        pos: { x: m.position.x, y: m.position.y, z: m.position.z },
-        rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
-        scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
-      };
+    allModelInstances.forEach(function(root) {
+      root.traverse(function(node) {
+        node.userData._default = {
+          pos: { x: node.position.x, y: node.position.y, z: node.position.z },
+          rot: { x: node.rotation.x, y: node.rotation.y, z: node.rotation.z },
+          scl: { x: node.scale.x, y: node.scale.y, z: node.scale.z },
+        };
+      });
     });
   }
 
-  /** 恢复所有模型到保存的默认变换并持久化 — 按 userData.id 匹配 */
+  /**
+   * 复位：把所有实例（含子节点）的局部变换恢复到加载时的默认状态。
+   * 不依赖任何持久化数据——默认姿态来自 GLB 自身，重置即「回到出厂」。
+   */
   function resetPositions() {
-    if (!_defaultTransforms) return;
-    allModelInstances.forEach(function(m) {
-      const id = m.userData.id || "unknown";
-      const d = _defaultTransforms[id];
-      if (!d) return;
-      m.position.set(d.pos.x, d.pos.y, d.pos.z);
-      m.rotation.set(d.rot.x, d.rot.y, d.rot.z);
-      m.scale.set(d.scl.x, d.scl.y, d.scl.z);
+    allModelInstances.forEach(function(root) {
+      root.traverse(function(node) {
+        const d = node.userData._default;
+        if (!d) return;
+        node.position.set(d.pos.x, d.pos.y, d.pos.z);
+        node.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+        node.scale.set(d.scl.x, d.scl.y, d.scl.z);
+      });
     });
-    savePositions();
   }
 
   // ======================== 公开接口 ========================
@@ -124,8 +84,6 @@ export function initImporter(ctx) {
     setView,
     updateViewTransition,
     cancelViewTransition,
-    savePositions,
-    loadPositions,
     saveDefaultTransforms,
     resetPositions,
   };

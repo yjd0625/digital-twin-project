@@ -164,12 +164,17 @@ function toggleLabels() {
 const importerCtx = { scene, camera, controls, allModelInstances };
 const importer = initImporter(importerCtx);
 
-const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions, onToggleLabels: toggleLabels });
+function resetAll() {
+  importer.resetPositions();
+  if (interaction) interaction.deselectAll();
+}
+const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: resetAll, onToggleLabels: toggleLabels });
 let dataHandler = null;
+let interaction = null;
 
 connectWebSocket();
 
-// ======================== 加载模型并恢复持久化数据 ========================
+// ======================== 加载模型（默认状态，后续由后端同步）========================
 loadAllModels()
   .then(async function(instances) {
     dataHandler = new DataHandler({
@@ -178,7 +183,7 @@ loadAllModels()
     });
     dataHandler.objects.cube = instances[0];
     const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
-    const interaction = initInteraction(ctx, importer, outlinePass);
+    interaction = initInteraction(ctx, importer, outlinePass);
 
     const allBox = new THREE.Box3().setFromObject(scene);
     const size = allBox.getSize(new THREE.Vector3());
@@ -189,8 +194,12 @@ loadAllModels()
     camera.position.set(-dist * 0.1 + 5, dist * 0.6, dist);
     controls.target.set(center.x + 15, center.y, center.z);
     controls.update();
+    // 捕获加载后的默认姿态作为复位基线（纯内存）
     importer.saveDefaultTransforms();
-    importer.loadPositions();
+    // TODO: 向后端请求当前全量状态并应用到各设备/零件：
+    //   const state = await fetchDeviceStateFromBackend();
+    //   applyStateToModels(state);  // 按 userData.id 将后端数据映射到设备/零件
+    // 当前保持加载后的默认状态，不做后端同步
     console.log("All models loaded:", instances.length);
   })
   .catch(function(e) { console.warn("Model loading failed:", e); });
