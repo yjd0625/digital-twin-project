@@ -9,22 +9,35 @@ class DataProcessor:
 
     @staticmethod
     def parse(raw: str) -> dict:
-        """解析 PlantSimulation 发来的字符串，返回结构化字典\"
-        格式示例: \"machine_01,TEMP,85.2\" 或 JSON 字符串
+        """解析 PlantSimulation 发来的字符串，返回结构化字典
+        格式示例: "machine_01,TEMP,85.2" 或 JSON 字符串
+
+        容错：PlantSimulation 常把 JSON 当作字符串再发一次（双重编码），
+        此时 json.loads 会得到 str 而非 dict，这里会再解一层，保证返回 dict。
         """
-        raw = raw.strip()
-        # 尝试 JSON 解析
         import json
+        raw = raw.strip()
+        obj = None
         try:
-            return json.loads(raw)
+            obj = json.loads(raw)
         except json.JSONDecodeError:
-            pass
+            obj = None
 
-        # 逗号分隔格式兜底
-        parts = [p.strip() for p in raw.split(",")]
-        if len(parts) >= 2:
-            return {"device": parts[0], "metric": parts[1], "value": parts[2] if len(parts) > 2 else ""}
+        # 拆双重编码：若解析结果是字符串，再尝试解析一次
+        if isinstance(obj, str):
+            try:
+                obj = json.loads(obj)
+            except json.JSONDecodeError:
+                pass
 
+        if isinstance(obj, dict):
+            return obj
+
+        # 既不是 dict 也无法解析为 JSON：安全透传，避免误拆成 device/metric/value
+        # 注意：旧的"逗号分隔兜底"已移除——它会把被 TCP 截断的 JSON 片段
+        # 错误拆成 {device,metric,value}，导致前端识别不到 type。消息重组
+        # 已在 main.py 的 plant_read_loop（字节缓冲 + raw_decode）中统一处理。
+        logger.warning("收到非 JSON 数据，原样透传: %s", raw[:200])
         return {"raw": raw}
 
     @staticmethod

@@ -52,7 +52,7 @@ async function loadAllModels() {
   const configs = [
     { url: "/models/TransferRobot.glb", label: "搬运机器人", count: 1, positions: [[15,0,0]], parts: [] },
     { url: "/models/AssembleStation.glb", label: "组装工位", count: 4, positions: [[5.5,0,-3],[12.5,0,-3],[19.5,0,-3],[26.5,0,-3]], parts: ["Bracket", "PositionPin", "LeftSlide", "RightSlide", "Clamp"] },
-    { url: "/models/WeldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]], parts: [] },
+    { url: "/models/WeldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]], parts: ["Z1", "Y1", "Y2", "Z2", "Y3", "Z3"] },
     { url: "/models/Buffer.glb", label: "缓冲区", count: 4, positions: [[6,0,2],[10,0,2],[18,0,2],[22,0,2]], parts: [] },
     // { url: "/models/test.glb", label: "test", count: 1, positions: [[0,0,0]] },
   ];
@@ -130,8 +130,17 @@ function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8000/ws");
   ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
-  try { const data = JSON.parse(event.data); if (dataHandler) dataHandler.process(data); }    //加载完成前不处理数据
-  catch(e) { console.error(e); }
+    let data = event.data;
+    // 防御：若后端误发来双重编码的 JSON 字符串，这里再解析一层
+    if (typeof data === "string") {
+      try { data = JSON.parse(data); } catch (e) { /* 保持原样，交给 process 判断 */ }
+    }
+    // 诊断日志：确认收到的真实类型与 type 字段（排查时看这一行）
+    console.log("[WS] onmessage → typeof=" + typeof data +
+      " | type=" + ((data && data.type) || "(none)") +
+      " | raw=" + String(event.data).slice(0, 200));
+    try { if (dataHandler) dataHandler.process(data); }    // 加载完成前不处理数据
+    catch (e) { console.error(e); }
   };
   ws.onclose = function() {
     ui.updateInfo("\u26d4 连接断开，正在重连...", "rgba(200,0,0,0.7)");
