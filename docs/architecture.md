@@ -13,10 +13,14 @@
                                         ▼
                                ┌──────────────────────┐
                                │  Redis Pub/Sub       │
-                               │  redis-twin : 6379   │
+                               │  本地原生 :6379       │
+                               │  (或 redis-twin)      │
                                │  plant/state         │
                                │  plant/command       │
                                └──────────────────────┘
+
+   InfluxDB 3 Core (原生 :18080)  ──时序数据──▶  InfluxDB3 Explorer (Docker :8888)
+   （注：Explorer 后端在容器内，经 host.docker.internal:18080 访问宿主机 InfluxDB）
 
 ## 数据流
 
@@ -34,4 +38,4 @@
 | 后端 | Python + FastAPI + redis + websockets |
 | 前端 | Three.js + Vite |
 | 通信 | TCP Socket (仿真<->后端), WebSocket (后端<->前端), Redis Pub/Sub (后端<->后端, 解耦) |
-| 消息总线 | Redis Pub/Sub（Docker: redis-twin:6379，主题 plant/state、plant/command） |
+| 消息总线 | Redis Pub/Sub（Docker 容器 `redis-twin:6379`，或本机原生 `E:\Redis\redis-server.exe:6379`；主题 plant/state、plant/command） |
