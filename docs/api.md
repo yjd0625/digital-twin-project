@@ -1,7 +1,7 @@
 
 ## WebSocket 接口
 
-**地址**: ws://localhost:8765
+**地址**: ws://localhost:8300/ws
 
 ### 后端 -> 前端（数据推送）
 
@@ -21,13 +21,16 @@
 | STOP | 暂停仿真 |
 | SPEED:20 | 设置仿真倍速 |
 
-## HTTP API（FastAPI 可选）
+## HTTP API（FastAPI）
 
-**地址**: http://localhost:8000
+**地址**: http://localhost:8300
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | / | 健康检查 |
+| GET | /health | 健康检查：`{"status":"ok","plant_connected":bool}` |
+| GET | /status | 运行状态：前端连接数 + Plant / 总线连接状态 |
+| POST | /command | 发布指令到 `plant/command` 主题，body：`{"command":"xxx"}` |
+| WS | /ws | 前端实时通道（见上方 WebSocket 接口） |
 
 ## TCP Socket（PlantSimulation 通信）
 

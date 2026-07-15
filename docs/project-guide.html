@@ -205,7 +205,7 @@ digital-twin-project/<br>
 │   └── <span class="fd">scripts/</span>              <span class="cmt">── SimTalk 脚本示例（数据发送/接收）</span><br>
 ├── <span class="hl">scripts/</span>           <span class="cmt"># 启动脚本</span><br>
 │   ├── <span class="fp">start_frontend.bat</span>    <span class="cmt">── 一键启动前端（http://localhost:5173）</span><br>
-│   └── <span class="fp">start_backend.bat</span>     <span class="cmt">── 一键启动后端（ws://localhost:8765）</span><br>
+│   └── <span class="fp">start_backend.bat</span>     <span class="cmt">── 一键启动后端（ws://localhost:8300/ws）</span><br>
 │
 └── <span class="fd">docs/</span>                <span class="cmt">── 文档（你正在看的这个文件）</span>
 </div>
@@ -249,7 +249,7 @@ digital-twin-project/<br>
 <tr><th>名称</th><th>说明</th><th>备注</th></tr>
 <tr><td><code>allModelInstances[]</code></td><td>所有模型实例的数组，全局共享</td><td>其他模块通过这个数组遍历模型</td></tr>
 <tr><td><code>loadAllModels()</code></td><td>异步加载所有 GLTF + DXF 模型</td><td>两阶段：先加载模板 → 再 .clone()</td></tr>
-<tr><td><code>connectWebSocket()</code></td><td>连接 ws://localhost:8765，自动重连</td><td>收到消息 → dataHandler.process()</td></tr>
+<tr><td><code>connectWebSocket()</code></td><td>连接 ws://localhost:8300/ws，自动重连</td><td>收到消息 → dataHandler.process()</td></tr>
 <tr><td><code>sendCommand(msg)</code></td><td>向后端发送控制指令字符串</td><td>被 UI 按钮调用</td></tr>
 <tr><td><code>toggleLabels()</code></td><td>切换所有 CSS2D 标签显隐</td><td>绑定到"隐藏标签"按钮</td></tr>
 <tr><td><code>animate()</code></td><td>主渲染循环</td><td>每帧更新 OrbitControls + 坐标轴 + 视角过渡</td></tr>
@@ -569,18 +569,19 @@ digital-twin-project/<br>
 <!-- ═══════════════ 后端 ═══════════════ -->
 <section id="backend">
 <h2 class="section-title">后端模块 <span class="tag backend">backend/src/</span></h2>
-<p style="color:var(--muted);margin-bottom:20px;">Python 后端，功能：连接 PlantSimulation 的 TCP Socket，接收仿真数据，解析后通过 WebSocket 广播给前端。</p>
+<p style="color:var(--muted);margin-bottom:20px;">Python 后端（FastAPI）。连接 PlantSimulation 的 TCP Socket 接收仿真数据，经 Redis 消息总线解耦后通过 WebSocket 广播给前端；前端 / REST 指令经总线反向下发 PlantSimulation。</p>
 
 <div class="grid-2">
 
 <div class="module">
-<h4>main.py <span class="tag backend">主入口</span></h4>
+<h4>main.py <span class="tag backend">主入口 (FastAPI)</span></h4>
 <div class="path">backend/src/main.py</div>
 <div class="desc">
-  <code>asyncio.run(main())</code> 启动：<br>
-  ① 启动 WebSocket 服务器 <code>ws://localhost:8765</code><br>
+  FastAPI 应用（uvicorn 托管），HTTP 与 WebSocket 共用端口 <code>8300</code>：<br>
+  ① WebSocket 路径 <code>/ws</code>（<code>ws://localhost:8300/ws</code>）<br>
   ② 连接 PlantSimulation TCP <code>127.0.0.1:30000</code><br>
-  ③ 循环接收 PlantSim 数据 → 解析 → 广播给前端
+  ③ <code>lifespan</code> 中启动后台任务：读 Plant → <code>bus.publish("plant/state")</code>；并订阅 <code>plant/state</code> → 广播前端、订阅 <code>plant/command</code> → 下发 Plant<br>
+  ④ 路由：<code>/ws</code>、<code>/health</code>、<code>/status</code>、<code>POST /command</code>（发指令改为 <code>bus.publish("plant/command")</code>）
 </div>
 </div>
 
@@ -618,16 +619,31 @@ digital-twin-project/<br>
 <div class="desc">
   所有可配置项集中在这里：<br>
   · PlantSim host/port: <code>127.0.0.1:30000</code><br>
-  · WS server host/port: <code>localhost:8765</code><br>
+  · HTTP / WS 共用端口: <code>8300</code>（避开 Docker/WSL 预留区间，WebSocket 路径 <code>/ws</code>）<br>
+  · 消息总线: <code>BUS_TYPE</code>(redis)、<code>REDIS_HOST/PORT/DB/PROTOCOL</code>、<code>TOPIC_PLANT_STATE</code>、<code>TOPIC_PLANT_COMMAND</code><br>
   · 日志级别<br>
   支持 <code>os.getenv()</code> 环境变量覆盖。
 </div>
 </div>
 
 <div class="module">
+<h4>bus.py <span class="tag backend">消息总线 (Redis Pub/Sub)</span></h4>
+<div class="path">backend/src/bus.py</div>
+<div class="desc">
+  传输无关的消息总线抽象，把 PlantSimulation 与前端解耦，为将来切 MQTT 铺路：<br>
+  · <code>MessageBus</code> 抽象基类（<code>publish</code> / <code>subscribe</code>）<br>
+  · <code>RedisBus</code> 实现：基于 <code>redis.asyncio</code>，强制 <code>protocol=2</code>（RESP2，兼容老版 Redis 的 HELLO 限制）<br>
+  · <code>create_bus()</code> 工厂按 <code>BUS_TYPE</code> 分发，将来加 <code>MqttBus</code> 即可切换，业务代码不动<br>
+  两个主题（MQTT 风格斜杠，切 MQTT 时名字直接复用）：<br>
+  · <code>plant/state</code> — Plant → 前端：实时状态 JSON<br>
+  · <code>plant/command</code> — 前端 / REST → Plant：控制指令
+</div>
+</div>
+
+<div class="module">
 <h4>requirements.txt <span class="tag backend">Python 依赖</span></h4>
 <div class="path">backend/requirements.txt</div>
-<div class="desc">唯一外部依赖是 <code>websockets</code>（标准库 <code>asyncio</code> / <code>json</code> / <code>socket</code> / <code>logging</code> 均为内置）。</div>
+<div class="desc">核心依赖：<code>fastapi</code>、<code>uvicorn[standard]</code>、<code>redis</code>（>=4.2，提供 <code>redis.asyncio</code>）、<code>websockets</code>。标准库 <code>asyncio</code> / <code>json</code> / <code>socket</code> / <code>logging</code> 为内置。</div>
 </div>
 
 </div>
@@ -640,18 +656,41 @@ PlantSimulation
     │  SimTalk 脚本：socket.SendLine("machine_01,TEMP,85.2")
     ▼  TCP :30000
 plant_connector.py   ← 阻塞 recv()
+    │  parse() → dict
+    ▼
+main.py: plant_read_loop → bus.publish("plant/state")
     │
+    ▼  Redis Pub/Sub（redis-twin 容器, 127.0.0.1:6379）
+bus.subscribe("plant/state") → websocket_handler.broadcast()
+    │  ws://localhost:8300/ws
     ▼
-data_processor.py   ← parse() 转为 dict
-    │
-    ▼
-websocket_handler.py ← broadcast() 对所有前端发 JSON
-    │  ws://localhost:8765
-    ▼
-浏览器前端 (main.js)
-    │  ws.onmessage → dataHandler.process(data)
-    ▼
-3D 模型颜色/位置/标签更新
+浏览器前端 (main.js) → dataHandler.process(data) → 3D 模型更新
+
+反向指令（前端点击 / POST /command）：
+前端 WS / POST /command → bus.publish("plant/command")
+    ▼  Redis
+bus.subscribe("plant/command") → plant_connector.send() → PlantSimulation
+</pre>
+</details>
+</div>
+
+<div class="api" style="margin-top:20px;">
+<details>
+<summary>🐳 Redis 部署（Docker，替代旧 Windows 版）</summary>
+<pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">
+# 旧 Windows Redis 服务(3.0.504)已停用，端口 6379 让给 Docker 容器
+# 创建并后台运行；--restart unless-stopped 保证重启电脑后自动拉起
+docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
+
+# 验证
+docker ps                                    # redis-twin 状态应为 Up
+docker exec -it redis-twin redis-cli ping   # 返回 PONG 即正常
+
+# 重启电脑后若未自动起，手动拉起：
+docker start redis-twin
+
+# 重要：旧 Windows Redis 服务请设为“禁用”，否则会抢占 6379 导致容器绑定失败
+# （管理员 PowerShell:  sc config Redis start= disabled）
 </pre>
 </details>
 </div>
