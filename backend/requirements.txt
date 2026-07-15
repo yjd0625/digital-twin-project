@@ -2,6 +2,8 @@
 websockets~=12.0
 fastapi~=0.110.0
 uvicorn[standard]~=0.29.0
+# 消息总线：Redis Pub/Sub（需 >=4.2 才有 redis.asyncio）；老版 Redis 服务端用 RESP2 兼容
+redis>=4.2
 
 # 开发 / 测试
 pytest~=8.0
