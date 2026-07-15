@@ -21,31 +21,18 @@
 
 | 组件 | 用途 | 是否必选 | 怎么准备 |
 |------|------|----------|----------|
-| **Redis** | 消息总线，解耦 Plant 采集端与前端订阅端（**必选**；`BUS_TYPE` 目前仅支持 `redis`） | **必选** | Docker 跑 `redis-twin` 容器，或本机原生安装 |
-| **Python 环境** | 运行后端 | 必选 | 建议用 conda 建 `DT` 环境并 `pip install -r requirements.txt` |
-| **Node.js** | 运行前端 | 必选 | 安装后 `npm install` |
-| **InfluxDB 3 Core 二进制** | 时序数据库（可选增强） | 可选 | 官网下载，装到本机 |
+| **Redis** | 消息总线，解耦 Plant 采集端与前端订阅端（必选；`BUS_TYPE` 目前仅支持 `redis`） | **必选** | Docker 跑 `redis-twin` 容器，或本机原生安装 |
+| **Python** | 运行后端 | **必选** | 建议用 conda 建 `DT` 环境并 `pip install -r requirements.txt` |
+| **Node.js** | 运行前端 | **必选** | 安装后 `npm install` |
+| **InfluxDB 3 Core** | 时序数据库（可选增强） | 可选 | 官网下载，装到本机 |
 | **Docker Desktop** | 用于跑 Redis 与 Explorer 容器 | 可选（用原生 Redis 时不需要） | 安装并启动 |
-| **PlantSimulation 软件** | 仿真数据来源 | 可选（无它则无实时仿真数据） | 自行安装（商业软件，不随仓库提供） |
-| **仿真模型 `.spp`** | 具体被孪生的产线 | 可选 | 自行准备；本仓库**不含**任何 `.spp` 模型文件 |
+| **PlantSimulation** | 仿真数据来源 | 可选（实时仿真数据来源） | 自行安装（商业软件，不随仓库提供） |
+
 
 > 必选 = 后端 + 前端 + Redis，三者缺一不可；InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
 
-## 前置条件对照
-
-| 类别 | 项 | 是否满足取决于 |
-|------|----|----------------|
-| 仓库内 | `backend/` `frontend/` `docs/` | `git clone` 即满足 |
-| 需自备 | Python 环境（建议 conda `DT`）+ 依赖 | 你创建环境并安装依赖 |
-| 需自备 | Node.js + `frontend/` 依赖 | `npm install` |
-| 需自备 | **Redis（消息总线，必选）** | 你启动 Redis（Docker 容器或本机原生） |
-| 需自备 | InfluxDB 3 Core 二进制（可选） | 你下载并启动 |
-| 需自备 | Docker Desktop（跑 Redis/Explorer 容器时） | 你安装 |
-| 需自备 | PlantSimulation + `.spp` 模型（可选） | 你准备；缺它则无仿真数据，但仍可启动服务 |
 
 ## 手动启动（逐步）
-
-> 必选项：Redis + 后端 + 前端。InfluxDB / Explorer / PlantSimulation 为可选，按需启动。
 
 ### 1. Redis（消息总线，必选）
 
@@ -111,7 +98,7 @@ npm run dev
 ### 6. PlantSimulation（仿真数据源，可选）
 
 1. 准备好仿真模型（`.spp` 不随仓库提供）。
-2. 运行仿真（F5）。
+2. 运行仿真，类库中添加 Socket 。
 3. 确保 Socket 服务器已启动，监听 `30000` 端口。
 
 ### 7. 访问
