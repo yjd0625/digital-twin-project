@@ -21,11 +21,13 @@
 ### 方式一：Docker Compose 一键启动（推荐）
 
 ```bash
-cp .env.example .env   # 填入 INFLUXDB3_AUTH_TOKEN / EXPLORER_SESSION_SECRET_KEY
+cp .env.example .env   # 必须填入 INFLUXDB3_AUTH_TOKEN（自己生成或启动后从日志复制，见 README「方式一」第 2 步）；EXPLORER_SESSION_SECRET_KEY 建议填
 docker compose up -d
 ```
 
 启动后前端访问 http://localhost:8080 ，其余地址见 README 端口总览。停止：`docker compose down`（加 `-v` 删 redis 数据卷）。
+
+> 只需 Docker（含 Compose 插件），无需在本机装 Python / Node.js——后端与前端均在各自容器内构建运行。
 
 ### 方式二：原生命令行逐步启动
 

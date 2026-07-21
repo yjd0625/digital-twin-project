@@ -16,6 +16,9 @@ dist/
 # ===== 本地日志 =====
 backend/logs/
 
+# ===== Docker 运行时数据（compose 的相对路径数据卷，禁止入库）=====
+.docker/
+
 # ===== 编辑器 / 系统 =====
 .vscode/
 .idea/
