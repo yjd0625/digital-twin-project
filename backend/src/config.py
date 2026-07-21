@@ -36,3 +36,15 @@ LOG_FILE = os.getenv("LOG_FILE", "logs/backend.log")
 
 # === 数据格式 ===
 DATA_ENCODING = "utf-8"
+
+# === 时序数据库（InfluxDB 3 Core，可选，best-effort 旁路写入）===
+# 启用后，后端在 plant_read_loop 解析到 state/action 时，旁路写入 InfluxDB。
+# 写入为 best-effort：失败仅记录日志，不中断 WebSocket 广播与采集主流程。
+INFLUXDB_ENABLED = os.getenv("INFLUXDB_ENABLED", "false").lower() == "true"
+# 后端为 Windows 原生 InfluxDB 3，直连 localhost（不要走 host.docker.internal）
+INFLUXDB_URL = os.getenv("INFLUXDB_URL", "http://localhost:18080")
+# Token 务必走环境变量，切勿硬编码进仓库
+INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")
+INFLUXDB_DATABASE = os.getenv("INFLUXDB_DATABASE", "digital_twin")
+INFLUXDB_MEASUREMENT_STATE = os.getenv("INFLUXDB_MEASUREMENT_STATE", "station_state")
+INFLUXDB_MEASUREMENT_ACTION = os.getenv("INFLUXDB_MEASUREMENT_ACTION", "station_action")
