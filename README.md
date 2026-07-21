@@ -38,6 +38,33 @@
 - **方式一：Docker Compose 一键启动（推荐）**——一条命令起全部五个组件。
 - **方式二：原生命令行逐步启动**——在本机 Python / Node / Docker 环境里分别敲命令，便于单步调试。
 
+## 系统架构
+
+```mermaid
+flowchart TB
+    User([用户浏览器])
+
+    subgraph Docker[Docker Compose 网络 dt-net]
+        FE[前端 Vite<br/>:8080 → 容器 :5173]
+        BE[后端 FastAPI<br/>:8300 / WebSocket]
+        RD[(Redis Pub/Sub<br/>:6379)]
+        IDB[(InfluxDB 3 Core<br/>:18080)]
+        EXP[Explorer UI<br/>:8888 → 容器 :8080]
+    end
+
+    PS[(PlantSimulation<br/>宿主 :30000)]
+
+    User -->|HTTP| FE
+    User -->|HTTP| EXP
+    FE <-->|WebSocket /ws| BE
+    BE <-->|publish / subscribe| RD
+    BE <-->|TCP :30000| PS
+    BE -.->|best-effort 写入| IDB
+    EXP <-->|host.docker.internal:18080| IDB
+```
+
+> 跨网络说明：后端容器经 `host.docker.internal:30000` 连宿主上的 PlantSimulation（要求 PlantSim 监听 `0.0.0.0`）；Explorer 由浏览器经 `host.docker.internal:18080` 访问 InfluxDB。两条链路都依赖 Docker Desktop 的宿主网关解析。
+
 ---
 
 ### 方式一：Docker Compose 一键启动（推荐）
@@ -240,27 +267,35 @@ Explorer 后端运行在 Docker 容器内，通过 `http://host.docker.internal:
 
 ## 数据流
 
-```
-PlantSimulation
-  │  (TCP:30000)
-  ▼
-后端采集端  →  publish "plant/state"  →  【Redis Pub/Sub】
-                                          │
-                                          ▼  subscribe
-                                       后端订阅端  →  (WebSocket:8300)  →  前端浏览器
+两条主链路都经 Redis 消息总线流转：
 
-前端指令 / POST /command  →  publish "plant/command"  →  【Redis Pub/Sub】  →  采集端  →  (TCP:30000)  →  PlantSimulation
+- **状态下行**：`PlantSimulation →(TCP:30000)→ 后端采集端 → publish "plant/state" →【Redis】→ subscribe → 后端订阅端 →(WebSocket:8300)→ 前端浏览器`
+- **指令上行**：`前端（POST /command）→ publish "plant/command" →【Redis】→ 后端采集端 →(TCP:30000)→ PlantSimulation`
+
+```mermaid
+flowchart LR
+    PS[(PlantSimulation<br/>:30000)]
+    BE[后端 FastAPI<br/>采集 + 订阅]
+    BUS[(Redis Pub/Sub<br/>plant/state · plant/command)]
+    FE[前端浏览器<br/>:8080]
+    IDB[(InfluxDB 3 Core<br/>:18080)]
+    EXP[Explorer<br/>:8888]
+
+    PS -->|TCP :30000 状态| BE
+    BE -->|publish plant/state| BUS
+    BUS -->|subscribe| BE
+    BE -->|WebSocket :8300| FE
+
+    FE -->|POST /command 指令| BE
+    BE -->|publish plant/command| BUS
+    BUS -->|subscribe| BE
+    BE -->|TCP :30000 指令| PS
+
+    BE -.->|best-effort 写入<br/>station_state / station_action| IDB
+    IDB --> EXP
 ```
 
-简化：`PlantSimulation → (TCP:30000) → 后端 →【Redis 总线】→ (WebSocket:8300) → 前端`
-
-后端采集端解析到 `state` / `action` 时，还会**旁路写入 InfluxDB 3**（measurement 分别为 `station_state` / `station_action`，best-effort，不阻塞主流程）：
-
-```
-后端采集端  ──parsed state──▶  station_state   ┐
-             ──parsed action─▶  station_action  ├─▶ InfluxDB 3 Core (:18080) ─▶ Explorer (:8888)
-             （time=接收时刻, simulationTime=仿真时刻, 只写出现的维度）
-```
+后端解析到 `state` / `action` 时还会**旁路写入 InfluxDB 3**（measurement 分别为 `station_state` / `station_action`，best-effort，不阻塞主流程）；字段含 `time`（接收时刻）与 `simulationTime`（仿真时刻），只写出现的维度，可在 Explorer 查 `SELECT * FROM station_state`。
 
 ## 技术栈
 
