@@ -203,6 +203,8 @@ digital-twin-project/<br>
 ├── <span class="hl">simulation/</span>        <span class="cmt"># PlantSimulation 仿真文件</span><br>
 │   ├── <span class="fd">models/</span>               <span class="cmt">── .spp 仿真模型</span><br>
 │   └── <span class="fd">scripts/</span>              <span class="cmt">── SimTalk 脚本示例（数据发送/接收）</span><br>
+├── <span class="hl">docker-compose.yml</span>   <span class="cmt"># 一键编排全部组件（Redis/InfluxDB/Explorer/后端/前端）</span><br>
+├── <span class="fd">.env.example</span>         <span class="cmt"># Docker Compose 环境变量模板（复制为 .env 填写）</span><br>
 └── <span class="fd">docs/</span>                <span class="cmt">── 文档（你正在看的这个文件）</span>
 </div>
 </section>
@@ -554,7 +556,7 @@ digital-twin-project/<br>
 <h3>构建配置 <span class="tag frontend">vite / npm</span></h3>
 <div class="path">frontend/vite.config.js &amp; package.json</div>
 <div class="desc">
-  <code>vite.config.js</code> 设置开发服务器端口 5173 和构建输出目录。<br>
+  <code>vite.config.js</code> 设置开发服务器端口 5173（Docker 方式下前端映射为宿主 <code>8080</code>）和构建输出目录。<br>
   <code>package.json</code> 中 <code>dependencies</code> 只有 <code>three</code> 和 <code>dxf-parser</code>，dev 依赖 <code>vite</code>。
   <code>npm run dev</code> 启动开发服务器，<code>npm run build</code> 打包到 <code>dist/</code>。
 </div>
@@ -671,30 +673,32 @@ bus.subscribe("plant/command") → plant_connector.send() → PlantSimulation
 </div>
 
 <div class="api" style="margin-top:24px;">
-<h3 style="margin:0 0 12px;">启动顺序与端口总览</h3>
-<p style="color:var(--muted);margin:0 0 14px;">本系统共 <b>5 个</b>需手动启动的组件，外加 <b>Docker Desktop</b> 作为容器运行前提。请按以下顺序启动：</p>
+<h3 style="margin:0 0 12px;">启动方式（两种，均不依赖脚本）</h3>
+<p style="color:var(--muted);margin:0 0 14px;">本系统共 <b>5 个</b>组件，推荐用 <b>Docker Compose 一键启动</b>；也可<b>原生命令行逐步启动</b>（手动敲命令，无需任何启动脚本）。详见根目录 <code>README.md</code> 的「方式一 / 方式二」。</p>
 <table style="width:100%;border-collapse:collapse;font-size:13px;">
 <thead>
 <tr style="background:var(--surface2);text-align:left;">
-<th style="padding:8px 12px;">顺序</th><th style="padding:8px 12px;">组件</th><th style="padding:8px 12px;">启动方式</th><th style="padding:8px 12px;">占用端口</th>
+<th style="padding:8px 12px;">组件</th><th style="padding:8px 12px;">Docker 方式（compose）</th><th style="padding:8px 12px;">原生命令行方式</th><th style="padding:8px 12px;">占用端口</th>
 </tr>
 </thead>
 <tbody>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">前置</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>Docker Desktop</b></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">桌面应用（建议开机自启）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">—</td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">1</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>Redis</b>（消息总线）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>redis-twin</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>6379</code></td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">2</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB 3 Core</b>（时序库）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>influxdb3-core</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>18080</code></td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">3</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB3 Explorer</b>（Web 界面）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>influxdb3-explorer</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8888</code></td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">4</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>后端</b> (FastAPI)</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Python 进程 <code>python -m src.main</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8300</code></td></tr>
-<tr><td style="padding:8px 12px;">5</td><td style="padding:8px 12px;">前端 (Vite)</td><td style="padding:8px 12px;"><code>npm run dev</code></td><td style="padding:8px 12px;"><code>5173</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>Redis</b>（消息总线）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">compose 自动编排（<code>dt-redis</code>）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>docker run redis-twin</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>6379</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB 3 Core</b></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">compose 自动编排（<code>dt-influxdb3</code>）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">原生二进制或 <code>docker run influxdb3-core</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>18080</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB3 Explorer</b></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">compose 自动编排（<code>dt-explorer</code>）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>docker run influxdb3-explorer</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8888</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>后端</b> (FastAPI)</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">compose 自动编排（<code>dt-backend</code>）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>python -m src.main</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8300</code></td></tr>
+<tr><td style="padding:8px 12px;">前端 (Vite)</td><td style="padding:8px 12px;"><code>dt-frontend</code>（宿主 <code>8080</code>）</td><td style="padding:8px 12px;"><code>npm run dev</code>（<code>5173</code>）</td><td style="padding:8px 12px;"><code>8080</code>(Docker) / <code>5173</code>(原生)</td></tr>
 </tbody>
 </table>
-<p style="color:var(--muted);margin:12px 0 0;">本机端口占用一览：<code>6379</code>(Redis) · <code>18080</code>(InfluxDB) · <code>8888</code>(Explorer) · <code>8300</code>(后端) · <code>5173</code>(前端) · <code>30000</code>(PlantSimulation Socket)。若某端口被占用，启动前需释放或改用其他端口。</p>
+<p style="color:var(--muted);margin:12px 0 0;">本机端口：<code>8080/8300/18080/8888/6379</code>(Docker) 或 <code>5173/8300/18080/8888/6379</code>(原生) · <code>30000</code>(PlantSimulation)。若被占用，启动前需释放或改用其他端口。</p>
+<p style="color:var(--muted);margin:12px 0 0;">⚠️ Windows + WSL2 上部分端口会被系统保留（如 5173），导致 Docker 绑定报 <code>access forbidden</code>。前端 Docker 映射已用 <code>8080</code> 规避；原生 <code>npm run dev</code> 若 5173 被占，改 <code>frontend/vite.config.js</code> 的 <code>server.port</code>。排查：<code>netsh int ipv4 show excludedportrange protocol=tcp</code>。</p>
 </div>
 
 <div class="api" style="margin-top:20px;">
 <details>
 <summary>🐳 Docker 基础设施（Redis + InfluxDB + Explorer）</summary>
 <pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">
+# （推荐）一键编排全部组件：在项目根目录执行  cp .env.example .env  然后  docker compose up -d
+# 下面为手动 docker run 等价命令，便于理解各容器参数
 # 0. 先确保 Docker Desktop 已启动（托盘图标 running），否则容器无法运行
 
 # 1. Redis（消息总线，端口 6379）
@@ -706,7 +710,7 @@ docker run -d --name influxdb3-core --restart unless-stopped -p 18080:18080 \
   influxdb:3-core influxdb3 serve --node-id=node0 --object-store=file --data-dir=/var/lib/influxdb3/data
 
 # 3. InfluxDB3 Explorer（Web 界面，映射 8888 → 容器 8080，仅本机可访问）
-docker run -d --name influxdb3-explorer --restart unless-stopped -p 127.0.0.1:8888:8080 influxdata/influxdb3-ui:1.8.0
+docker run -d --name influxdb3-explorer --restart unless-stopped -p 127.0.0.1:8888:8080 influxdata/influxdb3-ui:1.9.0
 
 # 验证
 docker ps                                    # 三个容器状态应为 Up
@@ -727,7 +731,10 @@ docker start redis-twin influxdb3-core influxdb3-explorer
 <section id="run">
 <h2 class="section-title">启动方式 <span class="tag doc">README.md</span></h2>
 <div class="module">
-<div class="desc">本仓库建议所有组件通过手动命令启动（后端 <code>python -m src.main</code>、前端 <code>npm run dev</code>、InfluxDB / Explorer 等见根目录 <code>README.md</code> 的「手动启动」一节）。</div>
+<div class="desc">本仓库提供两种等价启动方式，<b>均不依赖任何启动脚本</b>（脚本不在仓库内）：<br>
+① <b>Docker Compose 一键启动（推荐）</b>：根目录执行 <code>cp .env.example .env</code> 后 <code>docker compose up -d</code>，五个组件一次起完（前端 <code>http://localhost:8080</code>）。<br>
+② <b>原生命令行逐步启动</b>：后端 <code>python -m src.main</code>、前端 <code>npm run dev</code>（<code>5173</code>）、Redis / InfluxDB / Explorer 等见根目录 <code>README.md</code> 的「方式二」一节。<br>
+详细说明与端口排错见 <code>README.md</code>。</div>
 </div>
 </section>
 

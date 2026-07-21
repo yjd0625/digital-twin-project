@@ -77,6 +77,6 @@
 - **两个时刻**：Point 的 `time` = 实际接收时刻（保证时序正确）；`simulationTime` 作为 field 记录仿真内部时钟（action 兼容旧字段名 `timestamp`）。
 - **部分写入**：只写数据中出现的维度/轴，缺失的不写（InfluxDB field 不可为 null）。
 - **验证**：
-  - 独立脚本（无需仿真）：`python scripts/test_influx_write.py`（内置样例数据，验证写入链路）。
+  - 独立验证（无需仿真）：参考 `backend/src/influx_writer.py` 自写一小段写入代码，或用 `influxdb3` CLI 手动写入后在 Explorer 查看（best-effort，非必需）。
   - 在线验证：`GET /status` 看 `influxdb.write_count` 增长、`last_error=null`。
   - 浏览器查看：Explorer `http://localhost:8888` → `SELECT * FROM station_state ORDER BY time DESC LIMIT 50`。
