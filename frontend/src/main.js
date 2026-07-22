@@ -180,6 +180,7 @@ const importerCtx = { scene, camera, controls, allModelInstances };
 const importer = initImporter(importerCtx);
 
 function resetAll() {
+  if (dataHandler) dataHandler.detachAll();   // 先把挂着的物体卸回场景根，避免复位时坐标错位
   importer.resetPositions();
   if (dataHandler) dataHandler.clearActions();
   if (interaction) interaction.deselectAll();
@@ -254,7 +255,8 @@ loadAllModels()
       allModelInstances: instances,
       updateInfo: ui.updateInfo,
       updateSpeed: ui.updateSpeed,
-      onCreateModel: onCreateModel
+      onCreateModel: onCreateModel,
+      scene: scene
     });
     dataHandler.objects.cube = instances[0];
     dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位

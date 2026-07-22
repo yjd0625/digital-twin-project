@@ -103,6 +103,7 @@ export class DataHandler {
     this.simulateSpeed = 1;                // 动画播放倍率（来自 state.simulateSpeed）
     this.onResetRequested = null;          // 后端 "reset" 时回调（由 main.js 注入 resetAll）
     this.onCreateModel = ctx.onCreateModel || null;  // 后端 "create" 时回调（main.js 注入实际建模逻辑）
+    this.scene = ctx.scene || null;        // 场景根，用于 attach/detach 时 reparent（保留世界变换）
   }
 
   // ======================== 入口：收到后端数据 ========================
@@ -116,7 +117,11 @@ export class DataHandler {
         ? `commands=${data.commands ? data.commands.length : 0}`
         : type === "create"
           ? `object=${data.object}, position=${JSON.stringify(data.position)}`
-          : "";
+          : type === "attach"
+            ? `child=${data.child} → parent=${data.parent}${data.parentPart ? "::" + data.parentPart : ""}`
+            : type === "detach"
+              ? `child=${data.child}`
+              : "";
     console.log(`[DataHandler] 收到后端消息 type="${type}"${summary ? " | " + summary : ""}${data.timestamp ? " | ts=" + data.timestamp : ""}`);
     this.latestData = data;
 
@@ -133,6 +138,10 @@ export class DataHandler {
       if (this.onResetRequested) this.onResetRequested();  // 触发前端复位（含清选择框）
     } else if (type === "create") {
       this.createModel(data);
+    } else if (type === "attach") {
+      this.attachModel(data);
+    } else if (type === "detach") {
+      this.detachModel(data);
     } else {
       // "state" 及未知类型均按状态同步处理
       this.applyState(data);
@@ -173,6 +182,60 @@ export class DataHandler {
   registerModel(id, model) {
     if (!id || !model) return;
     this.modelMap.set(id, model);
+  }
+
+  // ======================== 父子绑定（attach / detach）========================
+  /**
+   * 处理后端 "attach" 指令：把 child 模型挂到 parent 设备的某个挂点（parentPart）下，
+   * 使 child 随 parent 的运动自动跟随（场景图父子关系）。
+   * 用 THREE.Object3D.attach() 完成 reparent，自动保留世界变换，不会发生瞬移。
+   * @param {object} msg { child, parent, parentPart? }
+   */
+  attachModel(msg) {
+    if (!msg || !msg.child || !msg.parent) {
+      console.warn("[DataHandler] attach 指令缺少 child/parent，已跳过:", msg);
+      return;
+    }
+    const child = this.findModelById(msg.child);
+    if (!child) { console.warn(`[DataHandler] attach: 未找到子模型 id="${msg.child}"`); return; }
+    const parentModel = this.findModelById(msg.parent);
+    if (!parentModel) { console.warn(`[DataHandler] attach: 未找到父模型 id="${msg.parent}"`); return; }
+    // 定位挂点：parentPart 缺省为父设备自身 id → _findPart 特判返回根节点（整体绑定）
+    const anchor = this._findPart(parentModel, msg.parentPart || msg.parent);
+    if (!anchor) { console.warn(`[DataHandler] attach: 挂点 "${msg.parentPart}" 在 "${msg.parent}" 中未找到`); return; }
+    // 若已挂在其他节点，先卸下再挂新节点
+    if (child.userData.attachedTo) this._detachOne(child);
+    anchor.attach(child);   // 保留世界变换的 reparent
+    child.userData.attachedTo = { parent: msg.parent, parentPart: msg.parentPart || null };
+    console.log(`[DataHandler] attach: "${msg.child}" → "${msg.parent}"${msg.parentPart ? "::" + msg.parentPart : ""}`);
+  }
+
+  /**
+   * 处理后端 "detach" 指令：把 child 从当前父节点卸回场景根（保留世界变换）。
+   * @param {object} msg { child }
+   */
+  detachModel(msg) {
+    if (!msg || !msg.child) {
+      console.warn("[DataHandler] detach 指令缺少 child，已跳过:", msg);
+      return;
+    }
+    const child = this.findModelById(msg.child);
+    if (!child) { console.warn(`[DataHandler] detach: 未找到子模型 id="${msg.child}"`); return; }
+    this._detachOne(child);
+  }
+
+  /** 内部：把单个 child 卸回场景根（保留世界变换），并清除 attachedTo 标记 */
+  _detachOne(child) {
+    if (this.scene) this.scene.attach(child);     // 保留世界变换地 reparent 回场景根
+    else if (child.parent) child.parent.add(child);
+    child.userData.attachedTo = null;
+  }
+
+  /** 复位前调用：把所有已绑定模型卸回场景根，使 resetPositions 能按独立世界姿态回写基线 */
+  detachAll() {
+    for (const m of this.allModelInstances) {
+      if (m.userData && m.userData.attachedTo) this._detachOne(m);
+    }
   }
 
   // ======================== 状态同步（瞬间应用）========================
