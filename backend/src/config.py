@@ -41,7 +41,9 @@ DATA_ENCODING = "utf-8"
 # 启用后，后端在 plant_read_loop 解析到 state/action 时，旁路写入 InfluxDB。
 # 写入为 best-effort：失败仅记录日志，不中断 WebSocket 广播与采集主流程。
 INFLUXDB_ENABLED = os.getenv("INFLUXDB_ENABLED", "false").lower() == "true"
-# 后端为 Windows 原生 InfluxDB 3，直连 localhost（不要走 host.docker.internal）
+# InfluxDB 3 现运行于 Docker 容器 dt-influxdb3（宿主机 localhost:18080 可达）。后端是 Windows 原生 Python，
+# 直连 localhost:18080 即可（不要走 host.docker.internal——那是给容器内 Explorer 访问宿主机用的）。
+# 容器已启用 authz：INFLUXDB_TOKEN 必填，否则返回 "the request was not authenticated"。
 INFLUXDB_URL = os.getenv("INFLUXDB_URL", "http://localhost:18080")
 # Token 务必走环境变量，切勿硬编码进仓库
 INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")

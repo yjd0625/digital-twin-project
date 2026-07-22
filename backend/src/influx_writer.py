@@ -158,12 +158,10 @@ class InfluxWriter:
             logger.warning("InfluxDB client 未连接，跳过 %d 条写入", len(points))
             return
         try:
-            # influxdb3-python 支持 points= 列表批量写入；若版本不支持则逐条兜底
-            try:
-                self.client.write(points=points)
-            except TypeError:
-                for p in points:
-                    self.client.write(p)
+            # 逐条写入：influxdb3-python 的 client.write(points=list) 批量路径不可靠
+            # （实测整批被丢弃或仅写入部分字段），单条 write(record=p) 稳定落库。
+            for p in points:
+                self.client.write(p)
             self.write_count += len(points)
             self.last_error = None
         except Exception as exc:  # noqa: BLE001

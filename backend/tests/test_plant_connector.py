@@ -1,4 +1,4 @@
-\"\"\"PlantConnector 单元测试（mock 层，不依赖真实 PlantSimulation）\"\"\"
+"""PlantConnector 单元测试（mock 层，不依赖真实 PlantSimulation）"""
 import unittest
 from unittest.mock import patch, MagicMock
 

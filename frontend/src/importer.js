@@ -79,6 +79,22 @@ export function initImporter(ctx) {
     });
   }
 
+  /**
+   * 为单个（运行时新建的）模型实例捕获其默认局部变换基线到 userData._default。
+   * 与 saveDefaultTransforms 的区别：只处理传入的 root 子树，不影响其他已加载模型，
+   * 因此可在运行时安全地为 "create" 出来的新模型建立复位基线（回到创建时的位置）。
+   */
+  function captureDefault(root) {
+    if (!root) return;
+    root.traverse(function(node) {
+      node.userData._default = {
+        pos: { x: node.position.x, y: node.position.y, z: node.position.z },
+        rot: { x: node.rotation.x, y: node.rotation.y, z: node.rotation.z },
+        scl: { x: node.scale.x, y: node.scale.y, z: node.scale.z },
+      };
+    });
+  }
+
   // ======================== 公开接口 ========================
   return {
     setView,
@@ -86,5 +102,6 @@ export function initImporter(ctx) {
     cancelViewTransition,
     saveDefaultTransforms,
     resetPositions,
+    captureDefault,
   };
 }

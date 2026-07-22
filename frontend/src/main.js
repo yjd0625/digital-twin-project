@@ -47,6 +47,9 @@ document.body.appendChild(axisRenderer.domElement);
 // ======================== 全局状态 ========================
 const allModelInstances = [];
 
+// 蓝图缓存：object 名 → 已加载的 GLB 模板（避免重复加载同一文件）
+const blueprints = {};
+
 // ======================== 加载初始模型（含 DXF 布局图）=======================
 async function loadAllModels() {
   const configs = [
@@ -187,13 +190,71 @@ let interaction = null;
 
 connectWebSocket();
 
+// ======================== 动态创建模型（响应后端 "create" 指令）========================
+/**
+ * 后端 "create" 指令的实际建模逻辑，由 DataHandler 通过 ctx.onCreateModel 调用。
+ * @param {string}   object   蓝图名，对应 /models/<object>.glb（如 "Part" → /models/Part.glb）
+ * @param {number[]} position 放置位置 [x, y, z]
+ * @param {object}   opts     { id, parts, scale, rotateX, autoAlignGround }
+ */
+async function onCreateModel(object, position, opts = {}) {
+  const id = opts.id || object;
+  // create 语义为「新增」，若同 id 已存在则不替换（避免重复堆叠）
+  if (dataHandler && dataHandler.findModelById(id)) {
+    console.warn(`[create] 已存在 id="${id}" 的模型，create 仅新增不替换，忽略`);
+    return;
+  }
+  // 1. 获取/加载蓝图模板（同一 object 只加载一次，之后克隆）
+  let template;
+  try {
+    if (!blueprints[object]) {
+      console.log(`[create] 首次加载蓝图: /models/${object}.glb`);
+      blueprints[object] = await loadGLTFTemplate(`/models/${object}.glb`);
+    }
+    template = blueprints[object];
+  } catch (e) {
+    console.error(`[create] 蓝图加载失败 object="${object}":`, e);
+    return;
+  }
+  // 2. 克隆并应用实例级参数（位置 / 贴地居中 / 缩放 / 标签）
+  const model = createInstanceFromTemplate(template, {
+    position: position || [0, 0, 0],
+    label: id,
+    autoAlignGround: opts.autoAlignGround !== undefined ? opts.autoAlignGround : true,
+    scale: opts.scale !== undefined ? opts.scale : 1,
+    rotateX: opts.rotateX,
+  });
+  model.userData.id = id;
+  // 3. 可选：预填零件缓存（加速后续 action/state 按名查找；未给则依赖 getObjectByName）
+  if (opts.parts && Array.isArray(opts.parts) && opts.parts.length) {
+    const parts = {};
+    for (const pn of opts.parts) {
+      const p = model.getObjectByName(pn);
+      if (p) parts[pn] = p;
+      else if (import.meta.env.DEV) console.warn(`[create] 零件 "${pn}" 在 "${object}" 中未找到`);
+    }
+    model.userData.parts = parts;
+  }
+  // 4. 加入场景与共享实例数组（interaction / importer 立即可见，可选中/拖拽/复位）
+  scene.add(model);
+  allModelInstances.push(model);
+  // 5. 记录该模型复位基线（回到创建时的位置/姿态）
+  importer.captureDefault(model);
+  // 6. 登记进 id→模型 查找表，使后续 state/action 能按 id 驱动它
+  if (dataHandler) dataHandler.registerModel(id, model);
+  // 7. 同步当前标签显隐（默认不显示）
+  applyLabelsVisibility();
+  console.log(`[create] 已创建模型 id="${id}" object="${object}" @`, position);
+}
+
 // ======================== 加载模型（默认状态，后续由后端同步）========================
 loadAllModels()
   .then(async function(instances) {
     dataHandler = new DataHandler({
       allModelInstances: instances,
       updateInfo: ui.updateInfo,
-      updateSpeed: ui.updateSpeed
+      updateSpeed: ui.updateSpeed,
+      onCreateModel: onCreateModel
     });
     dataHandler.objects.cube = instances[0];
     dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位
