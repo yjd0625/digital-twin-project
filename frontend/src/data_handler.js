@@ -110,19 +110,6 @@ export class DataHandler {
   process(data) {
     if (!data || typeof data !== "object") return data;
     const type = data.type || "state";     // 无 type 时默认按 state 处理（兼容旧格式）
-    // 接收后端消息日志
-    const summary = type === "state"
-      ? `stations=${data.stations ? data.stations.length : 0}, simulateSpeed=${data.simulateSpeed}`
-      : type === "action"
-        ? `commands=${data.commands ? data.commands.length : 0}`
-        : type === "create"
-          ? `object=${data.object}, position=${JSON.stringify(data.position)}`
-          : type === "attach"
-            ? `child=${data.child} → parent=${data.parent}${data.parentPart ? "::" + data.parentPart : ""}`
-            : type === "detach"
-              ? `child=${data.child}`
-              : "";
-    console.log(`[DataHandler] 收到后端消息 type="${type}"${summary ? " | " + summary : ""}${data.timestamp ? " | ts=" + data.timestamp : ""}`);
     this.latestData = data;
 
     // 线速度 / 播放倍率：所有消息类型共享（action 动画也需据此加速）
@@ -236,6 +223,26 @@ export class DataHandler {
     for (const m of this.allModelInstances) {
       if (m.userData && m.userData.attachedTo) this._detachOne(m);
     }
+  }
+
+  /**
+   * 复位时调用：删除所有由 "create" 指令动态创建的模型（初始加载的模型不受影响）。
+   * 逆序遍历，安全 splice；从父节点（场景或夹爪）移除并清理查找表。
+   * 注意：克隆体共享蓝图模板的 geometry/material，这里只移除引用、不 dispose，避免影响其他实例。
+   */
+  removeCreatedModels() {
+    let removed = 0;
+    for (let i = this.allModelInstances.length - 1; i >= 0; i--) {
+      const m = this.allModelInstances[i];
+      if (m.userData && m.userData.createdByCommand) {
+        if (m.parent) m.parent.remove(m);        // 从当前父节点（场景或夹爪）移除
+        this.allModelInstances.splice(i, 1);
+        if (m.userData.id) this.modelMap.delete(m.userData.id);
+        m.userData.attachedTo = null;
+        removed++;
+      }
+    }
+    if (removed > 0) console.log(`[DataHandler] 复位时删除 ${removed} 个动态创建的模型`);
   }
 
   // ======================== 状态同步（瞬间应用）========================

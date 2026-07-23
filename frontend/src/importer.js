@@ -54,11 +54,16 @@ export function initImporter(ctx) {
   function saveDefaultTransforms() {
     allModelInstances.forEach(function(root) {
       root.traverse(function(node) {
-        node.userData._default = {
+        const d = {
           pos: { x: node.position.x, y: node.position.y, z: node.position.z },
           rot: { x: node.rotation.x, y: node.rotation.y, z: node.rotation.z },
           scl: { x: node.scale.x, y: node.scale.y, z: node.scale.z },
         };
+        // 捕获默认颜色基线（仅对可被状态着色的网格；线条材质不参与染色）
+        if (node.isMesh && node.material && !node.material.isLineBasicMaterial) {
+          d.color = node.material.color.getHex();
+        }
+        node.userData._default = d;
       });
     });
   }
@@ -75,6 +80,10 @@ export function initImporter(ctx) {
         node.position.set(d.pos.x, d.pos.y, d.pos.z);
         node.rotation.set(d.rot.x, d.rot.y, d.rot.z);
         node.scale.set(d.scl.x, d.scl.y, d.scl.z);
+        // 复位颜色到加载时的默认色（applyState 会按 status 改色，复位须还原）
+        if (d.color !== undefined && node.isMesh && node.material && !node.material.isLineBasicMaterial) {
+          node.material.color.setHex(d.color);
+        }
       });
     });
   }
@@ -87,11 +96,15 @@ export function initImporter(ctx) {
   function captureDefault(root) {
     if (!root) return;
     root.traverse(function(node) {
-      node.userData._default = {
+      const d = {
         pos: { x: node.position.x, y: node.position.y, z: node.position.z },
         rot: { x: node.rotation.x, y: node.rotation.y, z: node.rotation.z },
         scl: { x: node.scale.x, y: node.scale.y, z: node.scale.z },
       };
+      if (node.isMesh && node.material && !node.material.isLineBasicMaterial) {
+        d.color = node.material.color.getHex();
+      }
+      node.userData._default = d;
     });
   }
 

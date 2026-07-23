@@ -5,7 +5,7 @@
 
 ### 后端 -> 前端（数据推送）
 
-数据用顶层 `type` 信封分流，常见两种（均来自 PlantSimulation，经 Redis 总线转发）：
+数据用顶层 `type` 信封分流，常见两种（来自数据源，默认 Python 实时仿真器，经 Redis 总线转发）：
 
 - `type=state`：瞬间同步各设备/零件姿态（每帧）
 
@@ -42,11 +42,7 @@
 
 ### 前端 -> 后端（指令发送）
 
-| 指令 | 说明 |
-|------|------|
-| START | 启动仿真 |
-| STOP | 暂停仿真 |
-| SPEED:20 | 设置仿真倍速 |
+> 控制通道已随架构解耦**移除**：实时环为单向（数据源 → 后端 → 前端），前端不再向后端发送 START/STOP/SPEED 等控制指令，后端也不再向数据源回写指令。PlantSimulation 作为只读分析外挂订阅 `source/state` 做预测/推演。
 
 ## HTTP API（FastAPI）
 
@@ -54,20 +50,19 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /health | 健康检查：`{"status":"ok","plant_connected":bool}` |
-| GET | /status | 运行状态：前端连接数 + Plant / 总线连接状态 + InfluxDB 写入统计（enabled/connected/write_count/last_error） |
-| POST | /command | 发布指令到 `plant/command` 主题，body：`{"command":"xxx"}` |
+| GET | /health | 健康检查：`{"status":"ok","source_connected":bool}` |
+| GET | /status | 运行状态：前端连接数 + 数据源(source) / 总线连接状态 + InfluxDB 写入统计（enabled/connected/write_count/last_error） |
 | WS | /ws | 前端实时通道（见上方 WebSocket 接口） |
 
-## TCP Socket（PlantSimulation 通信）
+## TCP Socket（数据源通信）
 
-**地址**: 127.0.0.1:30000
+后端作为 **TCP 客户端**连接数据源；数据源（默认 Python 实时仿真器）作为 **TCP 服务端**监听 `host:30000`（后端经 `host.docker.internal:30000` 访问宿主上的数据源，断线每 3s 自动重连）。
 
-数据格式：CSV 或 JSON 字符串，以换行符分隔。
+数据格式：多个 JSON 信封**直接拼接发送、不带换行/分隔符**，UTF-8 编码；信封 `type ∈ {create, state, action, reset, attach, detach}`。完整帧编码与信封 schema 见 `docs/CONNECTOR.md`。
 
 ## 时序数据库写入（InfluxDB 3 Core）
 
-后端可把 PlantSimulation 的 `state` / `action` **旁路写入** InfluxDB 3（best-effort，失败仅记日志，不影响实时孪生流）。
+后端可把数据源的 `state` / `action` **旁路写入** InfluxDB 3（best-effort，失败仅记日志，不影响实时孪生流）。
 
 - **启用**：设环境变量 `INFLUXDB_ENABLED=true`（默认 false）。鉴权时设 `INFLUXDB_TOKEN`。其余见 `backend/src/config.py`（`INFLUXDB_*` 项）。
 - **建库**：`influxdb3 create database digital_twin`（measurement 首写自动创建，无需预建表）。

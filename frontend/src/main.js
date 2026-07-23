@@ -57,7 +57,6 @@ async function loadAllModels() {
     { url: "/models/AssembleStation.glb", label: "组装工位", count: 4, positions: [[5.5,0,-3],[12.5,0,-3],[19.5,0,-3],[26.5,0,-3]], parts: ["Bracket", "PositionPin", "LeftSlide", "RightSlide", "Clamp"] },
     { url: "/models/WeldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]], parts: ["Z1", "Y1", "Y2", "Z2", "Y3", "Z3"] },
     { url: "/models/Buffer.glb", label: "缓冲区", count: 4, positions: [[6,0,2],[10,0,2],[18,0,2],[22,0,2]], parts: [] },
-    // { url: "/models/test.glb", label: "test", count: 1, positions: [[0,0,0]] },
   ];
 
   // === 第一阶段：每类文件只加载一次，得到模板（共享 geometry/material）===
@@ -180,7 +179,8 @@ const importerCtx = { scene, camera, controls, allModelInstances };
 const importer = initImporter(importerCtx);
 
 function resetAll() {
-  if (dataHandler) dataHandler.detachAll();   // 先把挂着的物体卸回场景根，避免复位时坐标错位
+  if (dataHandler) dataHandler.detachAll();          // 先把挂着的物体卸回场景根，避免复位时坐标错位
+  if (dataHandler) dataHandler.removeCreatedModels(); // 删除动态创建的模型（初始模型保留）
   importer.resetPositions();
   if (dataHandler) dataHandler.clearActions();
   if (interaction) interaction.deselectAll();
@@ -226,6 +226,7 @@ async function onCreateModel(object, position, opts = {}) {
     rotateX: opts.rotateX,
   });
   model.userData.id = id;
+  model.userData.createdByCommand = true;   // 标记为动态创建，复位时删除（初始模型无此标记）
   // 3. 可选：预填零件缓存（加速后续 action/state 按名查找；未给则依赖 getObjectByName）
   if (opts.parts && Array.isArray(opts.parts) && opts.parts.length) {
     const parts = {};

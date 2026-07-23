@@ -2,13 +2,13 @@
 
 设计目标
 --------
-把「传输层」与「业务层」解耦。业务代码（main.py / plant_read_loop /
+把「传输层」与「业务层」解耦。业务代码（main.py / source_read_loop /
 WebSocketHandler）只依赖 MessageBus 接口，将来从 Redis 切到 MQTT 时，
 只需新增 MqttBus 实现并改 config.BUS_TYPE，业务代码一行不用动。
 
 主题命名
 --------
-采用 MQTT 风格的斜杠层级（plant/state、plant/command）。Redis 视其为
+采用 MQTT 风格的斜杠层级（source/state；原 plant/command 控制主题已移除）。Redis 视其为
 普通 channel 名，不解释斜杠；MQTT 原生支持层级主题。因此切换传输层时
 主题名可以直接复用。
 
