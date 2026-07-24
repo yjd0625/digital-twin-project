@@ -97,17 +97,17 @@ async function loadAllModels() {
   }
 
   // --- DXF 产线布局图 ---
-  try {
-    const startTime = performance.now();
+  // try {
+  //   const startTime = performance.now();
 
-    const layout = await loadDXFModel(scene, "/models/layout_simplified.dxf", { position: [0, 0, 10], scale: 0.001 });
+  //   const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 10], scale: 0.001 });
 
-    const endTime = performance.now();
-    if (import.meta.env.DEV) {
-      console.log(`DXF loaded: (${(endTime - startTime).toFixed(2)} ms)`);
-    }
-    if (layout) allModelInstances.push(layout);
-  } catch(e) { console.warn("DXF layout load failed:", e); }
+  //   const endTime = performance.now();
+  //   if (import.meta.env.DEV) {
+  //     console.log(`DXF loaded: (${(endTime - startTime).toFixed(2)} ms)`);
+  //   }
+  //   if (layout) allModelInstances.push(layout);
+  // } catch(e) { console.warn("DXF layout load failed:", e); }
 
   return allModelInstances;
 }
@@ -174,9 +174,9 @@ loadAllModels()
     const center = allBox.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
     console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
-    const dist = Math.min(Math.max(maxDim * 1.5, 5), 300);
-    camera.position.set(dist * 0.6, dist * 0.6, dist);
-    controls.target.copy(center);
+    const dist = Math.min(Math.max(maxDim * 0.4, 5), 300);
+    camera.position.set(-dist * 0.1 + 5, dist * 0.6, dist);
+    controls.target.set(center.x + 15, center.y, center.z);
     controls.update();
     importer.saveDefaultTransforms();
     importer.loadPositions();
