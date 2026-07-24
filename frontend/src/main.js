@@ -165,10 +165,10 @@ renderer.domElement.addEventListener("pointerup", (e) => {
   let hit = false;
   for (const m of allModelInstances) {
     if (_raycaster.intersectObject(m, true).length > 0) {
-      selectObject(m); hit = true; break;
+      selectObject(m, _ctrlDown); hit = true; break;
     }
   }
-  if (!hit) deselectObject();
+  if (!hit) deselectAll();
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Control") { _ctrlDown = true; return; }
