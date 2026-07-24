@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createScene } from "./scene.js";
+import { createScene, USE_OUTLINE } from "./scene.js";
 import { loadGLTFTemplate, createInstanceFromTemplate, loadDXFModel } from "./models.js";
 import { DataHandler } from "./data_handler.js";
 import { setupUI } from "./ui.js";
@@ -10,7 +10,7 @@ import { initImporter } from "./importer.js";
 // ======================== 场景初始化 ========================
 console.clear();  // 清空控制台
 const container = document.body;
-const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
+const { scene, camera, renderer, labelRenderer, controls, composer, outlinePass } = createScene(container);
 
 // ======================== 左下角固定坐标轴 ========================
 const axisScene = new THREE.Scene();
@@ -163,7 +163,7 @@ connectWebSocket();
 
 // ======================== 初始化其他模块 ========================
 const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
-const interaction = initInteraction(ctx, importer);
+const interaction = initInteraction(ctx, importer, outlinePass);
 
 // ======================== 加载模型并恢复持久化数据 ========================
 loadAllModels()
@@ -197,6 +197,10 @@ window.addEventListener("resize", function() {
   const h = container.clientHeight || window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
+  if (USE_OUTLINE && composer) {
+    composer.setSize(w, h);
+    if (outlinePass) outlinePass.resolution.set(w, h);
+  }
 });
 
 // ======================== 主渲染循环 ========================
@@ -209,7 +213,8 @@ function animate() {
   importer.updateViewTransition(delta);
   _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
   axisCam.position.copy(_offset); axisCam.lookAt(0, 0, 0);
-  renderer.render(scene, camera);
+  if (USE_OUTLINE && composer && outlinePass && outlinePass.selectedObjects.length > 0) composer.render(delta);
+  else renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   axisRenderer.render(axisScene, axisCam);
 }

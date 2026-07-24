@@ -2,6 +2,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+
+export const USE_OUTLINE = true;  // 轮廓高亮开关
 /**
  * 创建 Three.js 场景、相机、灯光、控制器
  * @param {HTMLElement} container - 挂载容器的 DOM 元素
@@ -37,6 +45,30 @@ export function createScene(container) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;  // 惯性效果
   controls.dampingFactor = 0.3;  // 惯性阻尼系数
+
+  // --- 根据开关创建轮廓高亮系统 ---
+  let composer, outlinePass = null;
+  if (USE_OUTLINE) {
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    // --- 轮廓高亮 Pass ---
+    outlinePass = new OutlinePass(new THREE.Vector2(w, h), scene, camera);
+    outlinePass.edgeStrength = 2.0;  // 轮廓强度
+    outlinePass.edgeGlow = 0.0;  // 边缘发光
+    outlinePass.edgeThickness = 1.0;  // 轮廓厚度
+    outlinePass.visibleEdgeColor.set("#ffffff");  // 可见边缘颜色
+    outlinePass.hiddenEdgeColor.set("#000000");
+    composer.addPass(outlinePass);
+    // --- FXAA 抗锯齿 ---
+    const fxaaPass = new ShaderPass(FXAAShader);
+    const pixelRatio = renderer.getPixelRatio();
+    fxaaPass.uniforms['resolution'].value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
+    composer.addPass(fxaaPass);
+    // --- 输出 Pass ---
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+  }
 
   // --- 灯光 ---
   const ambient = new THREE.AmbientLight(0x404060);  // 环境光，物体暗部
@@ -96,5 +128,5 @@ export function createScene(container) {
   grid.position.y = 0;
   scene.add(grid);
 
-  return { scene, camera, renderer, labelRenderer, controls };
+  return { scene, camera, renderer, labelRenderer, controls, composer, outlinePass };
 }

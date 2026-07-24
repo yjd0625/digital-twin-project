@@ -1,10 +1,10 @@
 import * as THREE from "three";
-
+import { USE_OUTLINE } from "./scene.js";
 /**
  * 交互模块 — 模型选择、拖拽移动、键盘快捷键（旋转/缩放/删除）
  */
 
-export function initInteraction(ctx, importer) {
+export function initInteraction(ctx, importer, outlinePass) {
   const { scene, camera, controls, renderer, allModelInstances, dataHandler } = ctx;
 
   // ======================== 选择状态 ========================
@@ -20,7 +20,7 @@ export function initInteraction(ctx, importer) {
   let _ctrlDown = false;
 
   const selectedObjects = [];
-  const selectionBoxes = {};
+  let selectionBoxes = {};
 
   // Ctrl 键释放时清除状态
   document.addEventListener("keyup", function _keyup(e) {
@@ -30,10 +30,16 @@ export function initInteraction(ctx, importer) {
   // ======================== 选择操作 ========================
   function selectObject(obj, multi) {
     if (multi) {
-      if (selectedObjects.indexOf(obj) >= 0) {
-        if (selectionBoxes[obj.id]) { scene.remove(selectionBoxes[obj.id]); delete selectionBoxes[obj.id]; }
-        let i = selectedObjects.indexOf(obj);
-        if (i >= 0) selectedObjects.splice(i, 1);
+      const idx = selectedObjects.indexOf(obj);
+      if (idx >= 0) {
+        const box = selectionBoxes[obj.id];
+        if (box) { scene.remove(box); delete selectionBoxes[obj.id]; }
+        // 根据配置移除高亮轮廓
+        if (USE_OUTLINE && outlinePass) {
+          const idx2 = outlinePass.selectedObjects.indexOf(obj);
+          if (idx2 >= 0) outlinePass.selectedObjects.splice(idx2, 1);
+        }
+        selectedObjects.splice(idx, 1);
         return;
       }
       selectedObjects.push(obj);
@@ -41,15 +47,18 @@ export function initInteraction(ctx, importer) {
       deselectAll();
       selectedObjects.push(obj);
     }
-    let bx = new THREE.BoxHelper(obj, 0x00ff00);
-    bx.update();
-    scene.add(bx);
-    selectionBoxes[obj.id] = bx;
+    if (USE_OUTLINE && outlinePass) {
+      if (!outlinePass.selectedObjects.includes(obj)) outlinePass.selectedObjects.push(obj);
+    }else {let bx = new THREE.BoxHelper(obj, 0x00ff00);
+          bx.update();
+          scene.add(bx);
+          selectionBoxes[obj.id] = bx;
+    }
   }
-
   function deselectAll() {
     for (let k in selectionBoxes) { scene.remove(selectionBoxes[k]); }
-    for (let k in selectionBoxes) delete selectionBoxes[k];
+    selectionBoxes = {};
+    if (USE_OUTLINE && outlinePass) outlinePass.selectedObjects = [];
     selectedObjects.length = 0;
   }
 
