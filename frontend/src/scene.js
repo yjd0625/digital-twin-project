@@ -11,19 +11,19 @@ export function createScene(container) {
   scene.background = new THREE.Color(0x111122);
 
   // 相机
-  const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, container.clientWidth || window.innerWidth / container.clientHeight || window.innerHeight, 0.1, 1000);
   camera.position.set(5, 5, 10);
   camera.lookAt(0, 0, 0);
 
   // WebGL 渲染器
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
   // CSS2D 渲染器（标签）
   const labelRenderer = new CSS2DRenderer();
-  labelRenderer.setSize(container.clientWidth, container.clientHeight);
+  labelRenderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
   labelRenderer.domElement.style.position = 'absolute';
   labelRenderer.domElement.style.top = '0';
   labelRenderer.domElement.style.left = '0';
@@ -52,3 +52,4 @@ export function createScene(container) {
 
   return { scene, camera, renderer, labelRenderer, controls };
 }
+
