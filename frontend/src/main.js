@@ -120,14 +120,17 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // \u53ea\u540c\u6b65\u65cb\u8f6c\uff0c\u4f4d\u7f6e\u56fa\u5b9a\uff08\u53f3\u952e\u5e73\u79fb\u65f6\u8f74\u4e0d\u4f1a\u79fb\u52a8\uff09\r\n  _offset\.copy\(camera\.position\)\.normalize\(\)\.multiplyScalar\(axisDist\);\r\n  axisCam\.position\.copy\(_offset\);
-  axisCam.quaternion.copy(camera.quaternion);
+  // \u4f4d\u7f6e\u6cbf\u4e3b\u76f8\u673a\u65b9\u5411\u56fa\u5b9a\u8ddd\u79bb\uff0c\u6bcf\u5e27\u91cd\u65b0\u6307\u5411\u539f\u70b9
+  _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
+  axisCam.position.copy(_offset);
+  axisCam.lookAt(0, 0, 0);
 
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   axisRenderer.render(axisScene, axisCam);
 }
 animate();
+
 
 
 
