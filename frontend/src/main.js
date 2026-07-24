@@ -223,6 +223,7 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
     }
     if (selectedObjects.length) {
       isDragging = true;
+      controls.update();
       controls.enabled = false;
     }
   }
