@@ -145,9 +145,8 @@ function sendCommand(msg) {
 }
 
 // ======================== 标签显隐切换 ========================
-let _labelsVisible = true;
-function toggleLabels() {
-  _labelsVisible = !_labelsVisible;
+let _labelsVisible = false;   // 默认不显示设备标签
+function applyLabelsVisibility() {
   const btn = document.getElementById("btn-labels");
   if (btn) btn.textContent = _labelsVisible ? '隐藏标签' : '显示标签';
   allModelInstances.forEach(function(m) {
@@ -158,6 +157,10 @@ function toggleLabels() {
       }
     });
   });
+}
+function toggleLabels() {
+  _labelsVisible = !_labelsVisible;
+  applyLabelsVisibility();
 }
 
 // ======================== 初始化 importer / UI / dataHandler ========================
@@ -180,7 +183,8 @@ loadAllModels()
   .then(async function(instances) {
     dataHandler = new DataHandler({
       allModelInstances: instances,
-      updateInfo: ui.updateInfo
+      updateInfo: ui.updateInfo,
+      updateSpeed: ui.updateSpeed
     });
     dataHandler.objects.cube = instances[0];
     dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位
@@ -198,6 +202,8 @@ loadAllModels()
     controls.update();
     // 捕获加载后的默认姿态作为复位基线（纯内存）
     importer.saveDefaultTransforms();
+    // 应用标签初始显隐（默认不显示设备标签）
+    applyLabelsVisibility();
     // TODO: 向后端请求当前全量状态并应用到各设备/零件：
     //   const state = await fetchDeviceStateFromBackend();
     //   applyStateToModels(state);  // 按 userData.id 将后端数据映射到设备/零件

@@ -21,7 +21,8 @@
  *     { "id": "组装工位 #1",
  *       "parts": {
  *         "Bracket":     { "position": {"x":5,   "duration":2.0}, "rotation": {"x":0.8, "duration":1.5} },
- *         "PositionPin": { "scale":    {"z":1.2, "duration":1.0} }
+ *         "PositionPin": { "scale":    {"z":1.2, "duration":1.0} },
+ *         "Clamp":       { "position": {"x":3,   "speed":1.5} }    // 按速度：时长=位移/速度（匀速）
  *       } },
  *     { "id": "搬运机器人 #1",
  *       "parts": { "RobotBase": { "rotation": {"x":0.8, "z":0.8, "duration":1.5} } } },
@@ -35,6 +36,8 @@
  *
  * - state 为"部分覆盖"：只改给定的轴，未给的轴保持现状。
  * - 队列按零件并发：同一零件（含整体根节点）的下一条指令顺序执行，不同零件并发。
+ * - 动作通道时长优先级：通道 duration > 通道 speed（位移/速度，匀速）> command 级 duration（缺省 1.0s 并打印提示）。
+ * - speed 单位：位置/缩放 = 场景单位/秒（米/秒）；旋转 = 度/秒（内部换算为弧度/秒后参与计算）。
  * - simulateSpeed 作为动画播放倍率（elapsed += delta * simulateSpeed）。
  * - 状态优先：state 命中正在动画的零件时，瞬间赋值并取消其动画。
  */
@@ -48,6 +51,27 @@ const STATUS_COLORS = {
   welding: 0xffaa00,   // 焊接中 → 金色
   moving:  0x00ccff,   // 移动中 → 青色
 };
+
+// 两个 Euler 角之间的"距离"：各轴差向量模长（用于按 speed 推导时长）
+function eulerDist(e1, e2) {
+  const dx = e2.x - e1.x, dy = e2.y - e1.y, dz = e2.z - e1.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+// 解析单通道时长（优先级：通道 duration > 通道 speed（位移/速度，匀速）> command 级 duration）
+// 单位约定：位置/缩放 speed = 场景单位/秒（米/秒）；旋转 speed = 度/秒（内部转弧度/秒）
+function resolveChannelDur(def, dist, fallback, name, isRotation) {
+  if (def.duration !== undefined) return def.duration;
+  if (def.speed !== undefined) {
+    let v = def.speed;
+    if (isRotation) v = v * Math.PI / 180;   // 旋转 speed：度/秒 → 弧度/秒
+    if (dist <= 1e-9) return 0;              // 无实际位移 → 不产生动画
+    return dist / v;                         // 匀速：时长 = 位移 / 速度
+  }
+  console.info(`[DataHandler] 通道 "${name}" 未传入 duration/speed，回退 command 级 duration=${fallback}s`);
+  return fallback;
+}
+
 
 /**
  * DataHandler — 管理所有模型的状态更新与动作动画
@@ -66,6 +90,7 @@ export class DataHandler {
     }
     this.objects = ctx.objects || {};                      // 向后兼容，预留直接注册接口
     this.updateInfo = ctx.updateInfo || (() => {});
+    this.updateSpeed = ctx.updateSpeed || (() => {});   // 线速度独立标签（不覆盖连接状态）
     this.latestData = null;
 
     // ======================== 动作队列 / 动画状态 ========================
@@ -88,6 +113,12 @@ export class DataHandler {
     console.log(`[DataHandler] 收到后端消息 type="${type}"${summary ? " | " + summary : ""}${data.timestamp ? " | ts=" + data.timestamp : ""}`);
     this.latestData = data;
 
+    // 线速度 / 播放倍率：所有消息类型共享（action 动画也需据此加速）
+    if (data.simulateSpeed !== undefined) {
+      this.simulateSpeed = data.simulateSpeed;
+      this.updateSpeed("仿真倍速: " + data.simulateSpeed.toFixed(1));
+    }
+
     if (type === "action") {
       this.enqueueActions(data.commands || []);
     } else if (type === "reset") {
@@ -102,12 +133,6 @@ export class DataHandler {
 
   // ======================== 状态同步（瞬间应用）========================
   applyState(data) {
-    // 整体产线参数（线速度 / 播放倍率）
-    if (data.simulateSpeed !== undefined) {
-      this.simulateSpeed = data.simulateSpeed;
-      this.updateInfo("线速度: " + data.simulateSpeed.toFixed(1) + " m/s");
-    }
-
     // 逐个设备驱动
     if (data.stations && Array.isArray(data.stations)) {
       for (const station of data.stations) {
@@ -121,12 +146,12 @@ export class DataHandler {
         if (station.status) this.applyStatus(model, station.status);
 
         // 站级整体变换（兼容旧格式，真实数据一般放 parts 里）
-        if (station.x !== undefined || station.y !== undefined || station.z !== undefined) {
+        if (station.position.x !== undefined || station.position.y !== undefined || station.position.z !== undefined) {
           this.applyPosition(model, station);
         }
-        if (station.rotationX !== undefined) model.rotation.x = station.rotationX;
-        if (station.rotationY !== undefined) model.rotation.y = station.rotationY;
-        if (station.rotationZ !== undefined) model.rotation.z = station.rotationZ;
+        if (station.rotation.x !== undefined || station.rotation.y !== undefined || station.rotation.z !== undefined) {
+          this.applyRotation(model, station);
+        }
 
         // 零件变换（瞬间生效，并取消该零件可能正在进行的动画）
         if (station.parts && typeof station.parts === "object" && Object.keys(station.parts).length > 0) {
@@ -188,6 +213,7 @@ export class DataHandler {
       scl: part.scale.clone(),
     };
     // 各通道独立时长：仅当 target 中出现该通道才设置 dur（否则 0 = 不动画）
+    // 优先级：通道 duration > 通道 speed（位移/速度，匀速）> command 级 duration（缺省 1.0s 并提示）
     const dur = { pos: 0, rot: 0, scl: 0 };
     const fallback = (cmd.duration !== undefined) ? cmd.duration : 1.0;
     const t = cmd.target || {};
@@ -195,19 +221,19 @@ export class DataHandler {
       if (t.position.x !== undefined) to.pos.x = t.position.x;
       if (t.position.y !== undefined) to.pos.y = t.position.y;
       if (t.position.z !== undefined) to.pos.z = t.position.z;
-      dur.pos = (t.position.duration !== undefined) ? t.position.duration : fallback;
+      dur.pos = resolveChannelDur(t.position, from.pos.distanceTo(to.pos), fallback, "position");
     }
     if (t.rotation) {
       if (t.rotation.x !== undefined) to.rot.x = t.rotation.x;
       if (t.rotation.y !== undefined) to.rot.y = t.rotation.y;
       if (t.rotation.z !== undefined) to.rot.z = t.rotation.z;
-      dur.rot = (t.rotation.duration !== undefined) ? t.rotation.duration : fallback;
+      dur.rot = resolveChannelDur(t.rotation, eulerDist(from.rot, to.rot), fallback, "rotation", true);
     }
     if (t.scale) {
       if (t.scale.x !== undefined) to.scl.x = t.scale.x;
       if (t.scale.y !== undefined) to.scl.y = t.scale.y;
       if (t.scale.z !== undefined) to.scl.z = t.scale.z;
-      dur.scl = (t.scale.duration !== undefined) ? t.scale.duration : fallback;
+      dur.scl = resolveChannelDur(t.scale, from.scl.distanceTo(to.scl), fallback, "scale");
     }
     const key = cmd.id + "::" + cmd.part;
     this.activeAnimations.set(key, {
@@ -293,6 +319,13 @@ export class DataHandler {
     if (pos.x !== undefined) model.position.x = pos.x;
     if (pos.y !== undefined) model.position.y = pos.y;
     if (pos.z !== undefined) model.position.z = pos.z;
+  }
+
+  /** 更新模型旋转（x-y-z 三维） */
+  applyRotation(model, rot) {
+    if (rot.x !== undefined) model.rotation.x = rot.x;
+    if (rot.y !== undefined) model.rotation.y = rot.y;
+    if (rot.z !== undefined) model.rotation.z = rot.z;
   }
 
   /** 根据零件数据更新模型的子部件位置/旋转/缩放（瞬间）*/
