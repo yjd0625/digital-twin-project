@@ -143,7 +143,7 @@
 <body>
 
 <header>
-  <h1>🔧 PlantSimulation 数字孪生 · 模块文档</h1>
+  <h1>🔧 数字孪生 · 模块文档</h1>
   <p>想改什么功能，来这里查对应文件</p>
 </header>
 
@@ -166,7 +166,7 @@
   <li><a href="#fe-config">vite.config.js / package.json</a></li>
   <li><a href="#backend">后端模块</a></li>
   <li><a href="#run">启动方式</a></li>
-  <li><a href="#sim">PlantSimulation 仿真脚本</a></li>
+  <li><a href="#sim">仿真脚本（数据源 / PlantSimulation 外挂）</a></li>
 </ul>
 </div>
 
@@ -192,15 +192,15 @@ digital-twin-project/<br>
 │   ├── <span class="fp">index.html</span>           <span class="cmt">── HTML 骨架：按钮、工具栏、状态栏</span><br>
 │   ├── <span class="fp">vite.config.js</span>      <span class="cmt">── Vite 构建配置</span><br>
 │   └── <span class="fp">package.json</span>         <span class="cmt">── 依赖：three.js, dxf-parser, vite</span><br>
-├── <span class="hl">backend/</span>           <span class="cmt"># Python 后端：WebSocket 服务器 + PlantSim 连接</span><br>
+├── <span class="hl">backend/</span>           <span class="cmt"># Python 后端：WebSocket 服务器 + 数据源连接</span><br>
 │   └── <span class="fd">src/</span><br>
 │       ├── <span class="fp">main.py</span>              <span class="cmt">── 主入口：启动 WS 服务器 &amp; 接收循环</span><br>
 │       ├── <span class="fp">websocket_handler.py</span>  <span class="cmt">── 管理前端 WS 连接、广播消息</span><br>
-│       ├── <span class="fp">data_processor.py</span>     <span class="cmt">── 解析 PlantSimulation 数据</span><br>
-│       ├── <span class="fp">plant_connector.py</span>    <span class="cmt">── 与 PlantSim 的 TCP Socket 通信</span><br>
+│       ├── <span class="fp">data_processor.py</span>     <span class="cmt">── 解析数据源数据</span><br>
+│       ├── <span class="fp">source_connector.py</span>   <span class="cmt">── 与数据源的 TCP Socket 通信（后端为客户端）</span><br>
 │       ├── <span class="fp">config.py</span>            <span class="cmt">── 所有端口 / IP / 日志 配置</span><br>
 │       └── <span class="fp">__init__.py</span><br>
-├── <span class="hl">simulation/</span>        <span class="cmt"># PlantSimulation 仿真文件</span><br>
+├── <span class="hl">simulation/</span>        <span class="cmt"># 仿真文件（PlantSimulation 分析外挂 / 数据源示例）</span><br>
 │   ├── <span class="fd">models/</span>               <span class="cmt">── .spp 仿真模型</span><br>
 │   └── <span class="fd">scripts/</span>              <span class="cmt">── SimTalk 脚本示例（数据发送/接收）</span><br>
 ├── <span class="hl">docker-compose.yml</span>   <span class="cmt"># 一键编排全部组件（Redis/InfluxDB/Explorer/后端/前端）</span><br>
@@ -567,7 +567,7 @@ digital-twin-project/<br>
 <!-- ═══════════════ 后端 ═══════════════ -->
 <section id="backend">
 <h2 class="section-title">后端模块 <span class="tag backend">backend/src/</span></h2>
-<p style="color:var(--muted);margin-bottom:20px;">Python 后端（FastAPI）。连接 PlantSimulation 的 TCP Socket 接收仿真数据，经 Redis 消息总线解耦后通过 WebSocket 广播给前端；前端 / REST 指令经总线反向下发 PlantSimulation。</p>
+<p style="color:var(--muted);margin-bottom:20px;">Python 后端（FastAPI）。作为 TCP 客户端连接数据源（默认 Python 实时仿真器）的 Socket 接收仿真数据，经 Redis 消息总线解耦后通过 WebSocket 广播给前端。实时环为单向（数据源→后端→前端），控制指令回写已移除；PlantSimulation 仅作只读分析外挂订阅 source/state。</p>
 
 <div class="grid-2">
 
@@ -577,9 +577,9 @@ digital-twin-project/<br>
 <div class="desc">
   FastAPI 应用（uvicorn 托管），HTTP 与 WebSocket 共用端口 <code>8300</code>：<br>
   ① WebSocket 路径 <code>/ws</code>（<code>ws://localhost:8300/ws</code>）<br>
-  ② 连接 PlantSimulation TCP <code>127.0.0.1:30000</code><br>
-  ③ <code>lifespan</code> 中启动后台任务：读 Plant → <code>bus.publish("plant/state")</code>；并订阅 <code>plant/state</code> → 广播前端、订阅 <code>plant/command</code> → 下发 Plant<br>
-  ④ 路由：<code>/ws</code>、<code>/health</code>、<code>/status</code>、<code>POST /command</code>（发指令改为 <code>bus.publish("plant/command")</code>）
+  ② 作为 TCP 客户端连接数据源 <code>host.docker.internal:30000</code>（数据源为 TCP 服务端，监听 <code>0.0.0.0:30000</code>，断线每 3s 自动重连）<br>
+  ③ <code>lifespan</code> 中启动后台任务 <code>source_read_loop</code>：读数据源 → <code>bus.publish("source/state")</code>；并订阅 <code>source/state</code> → 广播前端<br>
+  ④ 路由：<code>/ws</code>、<code>/health</code>、<code>/status</code>（控制指令通道已移除）
 </div>
 </div>
 
@@ -594,12 +594,12 @@ digital-twin-project/<br>
 </div>
 
 <div class="module">
-<h4>plant_connector.py <span class="tag backend">PlantSim 通信</span></h4>
-<div class="path">backend/src/plant_connector.py</div>
+<h4>source_connector.py <span class="tag backend">数据源通信</span></h4>
+<div class="path">backend/src/source_connector.py</div>
 <div class="desc">
-  <code>PlantConnector</code> 管理到 PlantSimulation 的 TCP 持久连接：<br>
-  · <code>.connect()</code> / <code>.send()</code> / <code>.recv()</code> / <code>.close()</code><br>
-  阻塞接收，在 asyncio 线程池中执行。
+  <code>SourceClient</code> 管理到数据源的 TCP 持久连接（后端为客户端，单向读取）：<br>
+  · <code>.connect()</code> / <code>.recv()</code> / <code>.close()</code>（无 <code>.send()</code>，控制回写已移除）<br>
+  阻塞接收，在 asyncio 线程池中执行；断线由 <code>source_read_loop</code> 每 3s 自动重连。
 </div>
 </div>
 
@@ -607,7 +607,7 @@ digital-twin-project/<br>
 <h4>data_processor.py <span class="tag backend">数据解析</span></h4>
 <div class="path">backend/src/data_processor.py</div>
 <div class="desc">
-  <code>DataProcessor.parse(raw)</code> 尝试 JSON 解析，失败则按逗号分隔格式兜底。
+  <code>DataProcessor.parse(raw)</code> 做 JSON 解析与字段规整（跨 TCP 包到达的帧由 <code>main.py</code> 的字节缓冲 + <code>raw_decode</code> 重组）。
 </div>
 </div>
 
@@ -616,9 +616,9 @@ digital-twin-project/<br>
 <div class="path">backend/src/config.py</div>
 <div class="desc">
   所有可配置项集中在这里：<br>
-  · PlantSim host/port: <code>127.0.0.1:30000</code><br>
+  · 数据源 host/port: <code>SOURCE_HOST/SOURCE_PORT</code>（默认 <code>host.docker.internal:30000</code>）<br>
   · HTTP / WS 共用端口: <code>8300</code>（避开 Docker/WSL 预留区间，WebSocket 路径 <code>/ws</code>）<br>
-  · 消息总线: <code>BUS_TYPE</code>(redis)、<code>REDIS_HOST/PORT/DB/PROTOCOL</code>、<code>TOPIC_PLANT_STATE</code>、<code>TOPIC_PLANT_COMMAND</code><br>
+  · 消息总线: <code>BUS_TYPE</code>(redis)、<code>REDIS_HOST/PORT/DB/PROTOCOL</code>、<code>TOPIC_SOURCE_STATE</code>（原 <code>plant/command</code> 控制主题已移除）<br>
   · 日志级别<br>
   支持 <code>os.getenv()</code> 环境变量覆盖。
 </div>
@@ -628,13 +628,12 @@ digital-twin-project/<br>
 <h4>bus.py <span class="tag backend">消息总线 (Redis Pub/Sub)</span></h4>
 <div class="path">backend/src/bus.py</div>
 <div class="desc">
-  传输无关的消息总线抽象，把 PlantSimulation 与前端解耦，为将来切 MQTT 铺路：<br>
+  传输无关的消息总线抽象，把数据源与前端解耦，为将来切 MQTT 铺路：<br>
   · <code>MessageBus</code> 抽象基类（<code>publish</code> / <code>subscribe</code>）<br>
   · <code>RedisBus</code> 实现：基于 <code>redis.asyncio</code>，强制 <code>protocol=2</code>（RESP2，兼容老版 Redis 的 HELLO 限制）<br>
   · <code>create_bus()</code> 工厂按 <code>BUS_TYPE</code> 分发，将来加 <code>MqttBus</code> 即可切换，业务代码不动<br>
   两个主题（MQTT 风格斜杠，切 MQTT 时名字直接复用）：<br>
-  · <code>plant/state</code> — Plant → 前端：实时状态 JSON<br>
-  · <code>plant/command</code> — 前端 / REST → Plant：控制指令
+  · <code>source/state</code> — 数据源 → 前端：实时状态 JSON（控制指令主题 <code>plant/command</code> 已移除）
 </div>
 </div>
 
@@ -650,24 +649,21 @@ digital-twin-project/<br>
 <details>
 <summary>📡 数据流（从仿真到前端）</summary>
 <pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">
-PlantSimulation
-    │  SimTalk 脚本：socket.SendLine("machine_01,TEMP,85.2")
-    ▼  TCP :30000
-plant_connector.py   ← 阻塞 recv()
+数据源 Simulator（默认 Python 实时仿真器）
+    │  connectors/base.py: SourceConnector.serve() 作为 TCP 服务端监听 :30000
+    ▼  TCP :30000（后端为客户端，host.docker.internal，断线每 3s 重连）
+source_connector.py (SourceClient)  ← 阻塞 recv()
     │  parse() → dict
     ▼
-main.py: plant_read_loop → bus.publish("plant/state")
+main.py: source_read_loop → bus.publish("source/state")
     │
     ▼  Redis Pub/Sub（redis-twin 容器, 127.0.0.1:6379）
-bus.subscribe("plant/state") → websocket_handler.broadcast()
+bus.subscribe("source/state") → websocket_handler.broadcast()
     │  ws://localhost:8300/ws
     ▼
 浏览器前端 (main.js) → dataHandler.process(data) → 3D 模型更新
 
-反向指令（前端点击 / POST /command）：
-前端 WS / POST /command → bus.publish("plant/command")
-    ▼  Redis
-bus.subscribe("plant/command") → plant_connector.send() → PlantSimulation
+（实时环为单向：无反向指令通道；PlantSimulation 仅作只读分析外挂订阅 source/state）
 </pre>
 </details>
 </div>
@@ -689,7 +685,7 @@ bus.subscribe("plant/command") → plant_connector.send() → PlantSimulation
 <tr><td style="padding:8px 12px;">前端 (Vite)</td><td style="padding:8px 12px;"><code>dt-frontend</code>（宿主 <code>8080</code>）</td><td style="padding:8px 12px;"><code>npm run dev</code>（<code>5173</code>）</td><td style="padding:8px 12px;"><code>8080</code>(Docker) / <code>5173</code>(原生)</td></tr>
 </tbody>
 </table>
-<p style="color:var(--muted);margin:12px 0 0;">本机端口：<code>8080/8300/18080/8888/6379</code>(Docker) 或 <code>5173/8300/18080/8888/6379</code>(原生) · <code>30000</code>(PlantSimulation)。若被占用，启动前需释放或改用其他端口。</p>
+<p style="color:var(--muted);margin:12px 0 0;">本机端口：<code>8080/8300/18080/8888/6379</code>(Docker) 或 <code>5173/8300/18080/8888/6379</code>(原生) · <code>30000</code>(数据源 Simulator)。若被占用，启动前需释放或改用其他端口。</p>
 <p style="color:var(--muted);margin:12px 0 0;">⚠️ Windows + WSL2 上部分端口会被系统保留（如 5173），导致 Docker 绑定报 <code>access forbidden</code>。前端 Docker 映射已用 <code>8080</code> 规避；原生 <code>npm run dev</code> 若 5173 被占，改 <code>frontend/vite.config.js</code> 的 <code>server.port</code>。排查：<code>netsh int ipv4 show excludedportrange protocol=tcp</code>。</p>
 </div>
 
@@ -741,7 +737,7 @@ docker start redis-twin influxdb3-core influxdb3-explorer
 
 <!-- ═══════════════ PlantSim ═══════════════ -->
 <section id="sim">
-<h2 class="section-title">PlantSimulation 脚本 <span class="tag sim">simulation/</span></h2>
+<h2 class="section-title">仿真脚本（数据源 / PlantSimulation 外挂） <span class="tag sim">simulation/</span></h2>
 
 <div class="grid-2">
 
@@ -754,13 +750,13 @@ docker start redis-twin influxdb3-core influxdb3-explorer
 <div class="module">
 <h4>command_receiver.txt <span class="tag sim">指令接收示例</span></h4>
 <div class="path">simulation/scripts/command_receiver.txt</div>
-<div class="desc">SimTalk 示例脚本，演示如何接收来自前端的控制指令（START/STOP/SPEED）。</div>
+<div class="desc">SimTalk 示例脚本，演示如何接收控制指令（START/STOP/SPEED）。注：实时环的指令回写已移除，本脚本仅作分析外挂参考。</div>
 </div>
 
 <div class="module">
 <h4>simulation/ <span class="tag sim">仿真对接</span></h4>
 <div class="path">simulation/</div>
-<div class="desc">PlantSimulation 对接资源目录。仿真模型文件（<code>.spp</code>）<b>不开源、不随仓库提供</b>，请自行准备；<code>simulation/scripts/</code> 下提供可复用的 SimTalk Socket 通信脚本示例。</div>
+<div class="desc">仿真对接资源目录。PlantSimulation 现为只读分析外挂（订阅 <code>source/state</code> 做预测/推演），其模型文件（<code>.spp</code>）<b>不开源、不随仓库提供</b>，请自行准备；<code>simulation/scripts/</code> 下提供可复用的 SimTalk Socket 通信脚本示例。</div>
 </div>
 
 </div>
@@ -788,7 +784,7 @@ docker start redis-twin influxdb3-core influxdb3-explorer
 <tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">新增视角预设</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>importer.js</b> → <code>VIEW_PRESETS</code></td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改视角过渡速度</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>importer.js</b> → <code>lerp(..., 0.12)</code></td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改后端监听端口</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>backend/src/config.py</b></td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改 PlantSimulation 连接地址</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>backend/src/config.py</b></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改数据源连接地址</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>backend/src/config.py</b></td></tr>
 </table>
 </div>
 </section>

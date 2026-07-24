@@ -1,4 +1,4 @@
 from .config import *
-from .plant_connector import PlantConnector
+from .source_connector import SourceClient
 from .websocket_handler import WebSocketHandler
 from .data_processor import DataProcessor

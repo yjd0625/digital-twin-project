@@ -1,22 +1,21 @@
-"""主入口：FastAPI 应用，承载 WebSocket(/ws) + REST，并驱动 PlantSimulation TCP 数据"""
+"""主入口：FastAPI 应用，承载 WebSocket(/ws) + REST，并驱动数据源(Source) TCP 数据"""
 import asyncio
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
 
-from .config import (WS_PATH, HTTP_HOST, HTTP_PORT, PLANT_BUFFER_SIZE,
+from .config import (WS_PATH, HTTP_HOST, HTTP_PORT, SOURCE_BUFFER_SIZE,
                      DATA_ENCODING, LOG_LEVEL, LOG_FILE,
-                     TOPIC_PLANT_STATE, TOPIC_PLANT_COMMAND,
+                     TOPIC_SOURCE_STATE,
                      INFLUXDB_ENABLED, INFLUXDB_URL, INFLUXDB_TOKEN,
                      INFLUXDB_DATABASE, INFLUXDB_MEASUREMENT_STATE,
                      INFLUXDB_MEASUREMENT_ACTION)
-from .plant_connector import PlantConnector
+from .source_connector import SourceClient
 from .websocket_handler import WebSocketHandler
 from .data_processor import DataProcessor
 from .bus import create_bus
@@ -25,18 +24,14 @@ from .influx_writer import InfluxWriter
 logger = logging.getLogger(__name__)
 
 
-class CommandRequest(BaseModel):
-    """通过 HTTP 发送给 PlantSimulation 的指令"""
-    command: str
-
-
 # ---- 共享模块（模块级单例，lifespan 与路由共用）----
 # 数据经消息总线（Redis Pub/Sub）解耦，为将来切 MQTT 铺路：
-#   采集端 plant_read_loop --publish plant/state-->  Redis --subscribe--> processor.process --> handler.broadcast --> 前端
-#   前端/REST --publish plant/command--> Redis --subscribe--> plant.send --> Plant
-plant = PlantConnector()
+#   采集端 source_read_loop --publish source/state-->  Redis --subscribe--> processor.process --> handler.broadcast --> 前端
+# 实时环为单向（数据源 -> 后端），不回写控制指令；Plant Simulation 已作为分析外挂断开，
+# 仅订阅 source/state 只读消费，未来预测/推演回写走独立通道 source/prediction（待开发）。
+source = SourceClient()
 bus = create_bus()
-handler = WebSocketHandler(bus, TOPIC_PLANT_COMMAND)
+handler = WebSocketHandler(bus)
 processor = DataProcessor()
 influx_writer = InfluxWriter()
 
@@ -46,25 +41,25 @@ influx_writer = InfluxWriter()
 _json_decoder = json.JSONDecoder()
 
 
-async def plant_read_loop() -> None:
-    """采集端后台任务：持续从 PlantSimulation 读取并发布到总线（断线自动重连）"""
+async def source_read_loop() -> None:
+    """采集端后台任务：持续从数据源(Source)读取并发布到总线（断线自动重连）"""
     loop = asyncio.get_running_loop()
     byte_buffer = b""
     while True:
         try:
-            if not plant.is_connected:
+            if not source.is_connected:
                 try:
-                    plant.connect()
+                    source.connect()
                     byte_buffer = b""   # 重连后清空，避免旧数据混入新会话
                 except OSError:
-                    logger.warning("PlantSimulation 未连接，3s 后重试...")
+                    logger.warning("数据源未连接，3s 后重试...")
                     await asyncio.sleep(3)
                     continue
-            raw = await loop.run_in_executor(None, plant.recv, PLANT_BUFFER_SIZE)
+            raw = await loop.run_in_executor(None, source.recv, SOURCE_BUFFER_SIZE)
             if not raw:
                 # recv 返回空 bytes = 对端已关闭连接
-                logger.warning("PlantSimulation 连接已关闭，尝试重连...")
-                plant.close()
+                logger.warning("数据源连接已关闭，尝试重连...")
+                source.close()
                 byte_buffer = b""
                 continue
             byte_buffer += raw
@@ -84,7 +79,7 @@ async def plant_read_loop() -> None:
                 # 按字节对齐消费已解析的前缀（raw_decode 返回的 end 是字符索引）
                 consumed = text[:end].encode(DATA_ENCODING)
                 byte_buffer = byte_buffer[len(consumed):]
-                logger.info("Received from Plant: %s", text[:end])
+                logger.info("Received from source: %s", text[:end])
                 parsed = processor.parse(text[:end])
                 # 旁路写入时序数据库（best-effort，不阻塞主流程）
                 if influx_writer.enabled:
@@ -93,13 +88,13 @@ async def plant_read_loop() -> None:
                         asyncio.create_task(influx_writer.write_state(parsed))
                     elif msg_type == "action":
                         asyncio.create_task(influx_writer.write_action(parsed))
-                # 解耦点①：不再直接 broadcast，而是发布到 plant/state 主题
+                # 解耦点①：不再直接 broadcast，而是发布到 source/state 主题
                 try:
-                    await bus.publish(TOPIC_PLANT_STATE, json.dumps(parsed, ensure_ascii=False))
+                    await bus.publish(TOPIC_SOURCE_STATE, json.dumps(parsed, ensure_ascii=False))
                 except Exception as exc:  # noqa: BLE001 总线暂不可用不应中断采集
-                    logger.warning("Publish plant/state failed (dropped 1 msg): %s", exc)
+                    logger.warning("Publish source/state failed (dropped 1 msg): %s", exc)
         except asyncio.CancelledError:
-            logger.info("Plant read loop cancelled.")
+            logger.info("Source read loop cancelled.")
             break
         except Exception as exc:
             logger.error("Loop error: %s", exc, exc_info=True)
@@ -108,23 +103,15 @@ async def plant_read_loop() -> None:
 
 
 async def on_state_message(payload: str) -> None:
-    """分发端：收到 plant/state 消息 → 解析为 dict → 数据处理 → 广播给所有前端 WS"""
+    """分发端：收到 source/state 消息 → 解析为 dict → 数据处理 → 广播给所有前端 WS"""
     try:
         data = json.loads(payload)
     except ValueError:
-        logger.warning("Discard non-JSON on plant/state: %s", payload[:120])
+        logger.warning("Discard non-JSON on source/state: %s", payload[:120])
         return
     # 解耦点②：解析后、广播前插入数据处理（占位函数，后续在此编辑业务逻辑）
     data = processor.process(data)
     await handler.broadcast(data)
-
-
-async def on_command_message(payload: str) -> None:
-    """采集端：收到 plant/command 消息 → 下发给 PlantSimulation"""
-    try:
-        plant.send(payload)
-    except ConnectionError as exc:
-        logger.warning("Command dropped, Plant not connected: %s", exc)
 
 
 @asynccontextmanager
@@ -146,11 +133,10 @@ async def lifespan(app: FastAPI):
     # 1.5) 连接时序数据库（可选；未启用或连接失败均不致命）
     if INFLUXDB_ENABLED:
         influx_writer.connect()
-    # 2) 订阅：plant/state → 广播前端；plant/command → 下发 Plant
-    await bus.subscribe(TOPIC_PLANT_STATE, on_state_message)
-    await bus.subscribe(TOPIC_PLANT_COMMAND, on_command_message)
-    # 3) 采集端：读 Plant → 发布 plant/state
-    task = asyncio.create_task(plant_read_loop())
+    # 2) 订阅：source/state → 广播前端（单向；无 command 订阅）
+    await bus.subscribe(TOPIC_SOURCE_STATE, on_state_message)
+    # 3) 采集端：读数据源 → 发布 source/state
+    task = asyncio.create_task(source_read_loop())
     yield
     # 关闭阶段
     task.cancel()
@@ -160,14 +146,14 @@ async def lifespan(app: FastAPI):
         pass
     influx_writer.close()
     await bus.close()
-    plant.close()
+    source.close()
     logger.info("Server shut down.")
 
 
 app = FastAPI(
     title="数字孪生后端服务",
-    description="PlantSimulation ↔ 前端 实时数据桥接（FastAPI 版）。"
-                "WebSocket 实时推送，REST 提供健康检查与指令转发，交互式文档见 /docs。",
+    description="数据源(Source) ↔ 前端 实时数据桥接（FastAPI 版，已与 Plant Simulation 解耦）。"
+                "WebSocket 实时推送，REST 提供健康检查，交互式文档见 /docs。",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -184,21 +170,21 @@ app.add_middleware(
 
 @app.websocket(WS_PATH)
 async def ws_endpoint(websocket: WebSocket):
-    """前端实时通道：接收前端指令转发给 PlantSimulation，并接收 Plant 广播"""
+    """前端实时通道：把 source/state 经总线收到的消息广播给前端（实时环单向，无控制指令回写）"""
     await handler.handle_client(websocket)
 
 
 @app.get("/health", tags=["运维"], summary="健康检查")
 async def health():
-    """返回服务是否存活，以及到 PlantSimulation 的连接状态"""
-    return {"status": "ok", "plant_connected": plant.is_connected}
+    """返回服务是否存活，以及到数据源(Source)的连接状态"""
+    return {"status": "ok", "source_connected": source.is_connected}
 
 
 @app.get("/status", tags=["运维"], summary="运行状态")
 async def status():
-    """返回当前前端连接数、PlantSimulation 与消息总线连接状态"""
+    """返回当前前端连接数、数据源(Source)与消息总线连接状态"""
     return {
-        "plant_connected": plant.is_connected,
+        "source_connected": source.is_connected,
         "bus_connected": bus.is_connected,
         "frontend_connections": handler.connection_count,
         "influxdb": {
@@ -209,16 +195,6 @@ async def status():
             "last_error": influx_writer.last_error,
         },
     }
-
-
-@app.post("/command", tags=["控制"], summary="发送指令给 PlantSimulation")
-async def send_command(req: CommandRequest):
-    """通过消息总线把指令发布到 plant/command 主题，由采集端订阅后下发给 Plant。 """
-    try:
-        await bus.publish(TOPIC_PLANT_COMMAND, req.command)
-    except Exception as exc:  # noqa: BLE001 总线不可用时返回 503
-        raise HTTPException(status_code=503, detail=f"消息总线不可用: {exc}")
-    return {"published": req.command, "topic": TOPIC_PLANT_COMMAND}
 
 
 if __name__ == "__main__":

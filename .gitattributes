@@ -1,0 +1,4 @@
+# 强制 shell 脚本用 LF 换行，避免 Windows CRLF 导致容器内 dash 执行 `set -e\r` 报
+# "Illegal option -" 而启动崩溃（influxdb3 entrypoint 踩过此坑）。
+# 其余文本不在此强制，沿用本机 core.autocrlf 的既有行为，避免引入大批量换行符改动与警告。
+*.sh text eol=lf

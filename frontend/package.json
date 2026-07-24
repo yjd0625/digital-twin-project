@@ -2,7 +2,7 @@
   "name": "digital-twin-frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "PlantSimulation 数字孪生 3D 可视化前端",
+  "description": "数字孪生 3D 可视化前端",
   "type": "module",
   "scripts": {
     "dev": "vite",

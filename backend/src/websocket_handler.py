@@ -13,15 +13,15 @@ logger = logging.getLogger(__name__)
 class WebSocketHandler:
     """管理前端 WebSocket 连接的集合，提供注册／注销／广播能力。
 
-    与旧版的区别：不再直接持有 PlantConnector。前端发来的指令改为发布到
-    消息总线的 command 主题，由采集端订阅后再下发给 PlantSimulation，
-    从而把「前端指令」与「Plant 直连」解耦。
+    实时环为单向：数据源 -> 后端 -> 前端。前端不再经本服务下发控制指令
+    （原 plant/command 回写已随「断开 Plant 实时架构」移除）。本 handler 只
+    负责把 source/state 经总线收到的消息广播给所有前端，并在收到前端文本时
+    仅做记录（控制通道已不存在，将来若需前端触发推演再接 source/prediction）。
     """
 
-    def __init__(self, bus: MessageBus, command_topic: str):
+    def __init__(self, bus: MessageBus):
         self._connections: set[WebSocket] = set()
         self._bus = bus
-        self._command_topic = command_topic
 
     @property
     def connection_count(self) -> int:
@@ -35,9 +35,9 @@ class WebSocketHandler:
         try:
             while True:
                 message = await websocket.receive_text()
-                logger.info("Frontend says: %s", message)
-                # 不再直连 Plant：把指令发布到总线，由采集端订阅后下发
-                await self._bus.publish(self._command_topic, message)
+                # 控制通道已移除：实时数据单向（数据源 -> 后端 -> 前端）。
+                # 前端下发的文本暂不使用，仅记录，便于将来接 source/prediction。
+                logger.info("Frontend says (ignored, no control channel): %s", message)
         except WebSocketDisconnect:
             pass
         finally:

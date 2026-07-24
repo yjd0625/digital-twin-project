@@ -5,11 +5,11 @@ logger = logging.getLogger(__name__)
 
 
 class DataProcessor:
-    """对 PlantSimulation 的原始数据进行清洗、解析、格式化"""
+    """对数据源(Source)的原始数据进行清洗、解析、格式化"""
 
     @staticmethod
     def parse(raw: str) -> dict:
-        """解析 PlantSimulation 发来的字符串，返回结构化字典"""
+        """解析数据源(Source)发来的字符串，返回结构化字典"""
         import json
         raw = raw.strip()
         obj = None
@@ -31,7 +31,7 @@ class DataProcessor:
         # 既不是 dict 也无法解析为 JSON：安全透传，避免误拆成 device/metric/value
         # 注意：旧的"逗号分隔兜底"已移除——它会把被 TCP 截断的 JSON 片段
         # 错误拆成 {device,metric,value}，导致前端识别不到 type。消息重组
-        # 已在 main.py 的 plant_read_loop（字节缓冲 + raw_decode）中统一处理。
+        # 已在 main.py 的 source_read_loop（字节缓冲 + raw_decode）中统一处理。
         logger.warning("收到非 JSON 数据，原样透传: %s", raw[:200])
         return {"raw": raw}
 

@@ -7,6 +7,7 @@ set -e
 # 从而 InfluxDB / Explorer / backend 三端 token 完全统一，避免 INVALID_TOKEN_CORE。
 # 注意：不能用 /run/secrets（容器里通常只读、且 influxdb3 镜像以非 root 运行会 Permission denied），
 # 改用任何用户都可写的 /tmp。
+# 重要：本文件必须是 LF（Unix）换行；CRLF 会被容器内 dash 的 `set -e\r` 拒掉导致启动崩溃。
 TOKEN_FILE=/tmp/influxdb3-admin-token.json
 mkdir -p "$(dirname "$TOKEN_FILE")"
 cat > "$TOKEN_FILE" <<EOF

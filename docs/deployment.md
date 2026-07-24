@@ -11,9 +11,9 @@
 | InfluxDB 3 Core | 18080 | 18080 | 时序数据库（可选） |
 | InfluxDB3 Explorer | 8888 | 8888 | 映射 8888→容器 8080（可选） |
 | Redis | 6379 | 6379 | 消息总线（**必选**） |
-| PlantSimulation Socket | — | 30000 | 仿真数据 TCP 端口（可选） |
+| 数据源 Simulator | — | 30000 | 实时数据源 TCP 端口（可选，默认 Python 仿真器） |
 
-> Redis 为必选消息总线；InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
+> Redis 为必选消息总线；InfluxDB / Explorer 为可选增强；默认数据源是随仓库的 Python 实时仿真器（无需安装），PlantSimulation 为可选分析外挂。
 > 若 Windows 上报 `access forbidden`，说明该宿主端口被 Windows 划为排除端口范围，见 README「Windows 端口保留排错」一节。
 
 ## 本地开发
@@ -88,11 +88,15 @@ npm run dev
 
 浏览器打开 http://localhost:5173 。若本机 5173 被占用（Windows + WSL2 常见），改 `frontend/vite.config.js` 的 `server.port`，或改用方式一的 Docker 前端（默认 8080）。
 
-#### 6. 启动 PlantSimulation（可选）
+#### 6. 启动数据源（实时仿真器，可选）
 
-1. 准备仿真模型（`.spp` 不随仓库提供）
-2. 运行仿真（F5）
-3. 确保 Socket 服务器已启动，监听 `30000` 端口
+默认数据源是随仓库的 Python 实时仿真器，无需安装商业软件：
+
+```bash
+python -m connectors.sources.python_realtime
+```
+
+它作为 TCP 服务端监听 `0.0.0.0:30000`，后端（Docker 内 TCP 客户端）经 `host.docker.internal:30000` 自动连上，断线每 3s 重连。若要用 PlantSimulation 做离线推演，将其作为只读分析外挂订阅 `source/state`（`.spp` 模型不随仓库提供）。
 
 #### 7. 访问前端
 

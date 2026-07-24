@@ -9,7 +9,7 @@
 #   注：宿主 5173/5180 均落在 Windows/WSL2 保留段 5170-5269（excluded port range），Docker 映射报
 #       access forbidden；故前端宿主映射改用 8080（不在任何保留段）。容器内仍是 5173，HMR/WS 不受影响。
 # 说明：前端是浏览器应用，连 ws://localhost:8300/ws；后端把 8300 发布到宿主，故代码无需改。
-#      后端连 PlantSimulation 走 host.docker.internal:30000，要求 PlantSim 监听 0.0.0.0（非仅 127.0.0.1）。
+#      后端（Docker 内，作为 TCP 客户端）连宿主上的数据源走 host.docker.internal:30000，要求数据源仿真器在宿主监听 0.0.0.0:30000（非仅 127.0.0.1）。数据源可晚于后端启动/随时断开，后端每 3s 自动重连。
 #      数据全部用「项目内相对路径 + 命名卷」，不依赖任何本机绝对路径，clone 后在任意平台均可直接 up。
 
 name: digital-twin
@@ -87,9 +87,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PROTOCOL: 2
-      # 连宿主上的 PlantSimulation（需 PlantSim 监听 0.0.0.0）
-      PLANT_HOST: host.docker.internal
-      PLANT_PORT: 30000
+      # 连宿主上的数据源（默认 Python 实时仿真器，监听 30000）
+      # 注：Plant Simulation 已作为分析外挂断开实时架构，仅订阅 source/state 只读消费。
+      SOURCE_HOST: host.docker.internal
+      SOURCE_PORT: 30000
       INFLUXDB_ENABLED: ${INFLUXDB_ENABLED:-false}
       INFLUXDB_URL: http://influxdb3:18080
       INFLUXDB_TOKEN: ${INFLUXDB3_AUTH_TOKEN}

@@ -1,4 +1,4 @@
-"""InfluxDB 3 Core 旁路写入：把 PlantSimulation 的 state/action 同步落库（best-effort）
+"""InfluxDB 3 Core 旁路写入：把数据源(Source)的 state/action 同步落库（best-effort）
 
 设计要点：
 - 仅作旁路记录，写入失败 / 未启用都不影响 WebSocket 广播与采集主流程。

@@ -1,6 +1,15 @@
-# Digital Twin - PlantSimulation 数字孪生系统
+# Digital Twin 数字孪生系统（数据源中立）
 
-基于 PlantSimulation 的 3D 数字孪生可视化系统：后端通过 TCP 接入 PlantSimulation 仿真，经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可存入 InfluxDB 3，通过 InfluxDB3 Explorer 查看。
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![InfluxDB](https://img.shields.io/badge/InfluxDB-3%20Core-22ADF6?logo=influxdb&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-Frontend-000000?logo=threedotjs&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Data Source](https://img.shields.io/badge/Data%20Source-Python%20Simulator-4B8BBE)
+![Architecture](https://img.shields.io/badge/Architecture-Source%20Neutral%20%2F%20Single%20Direction-8A2BE2)
+
+基于**可插拔数据源**的 3D 数字孪生可视化系统：后端通过 TCP 接入数据源（默认随仓库的 Python 实时仿真器），经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可存入 InfluxDB 3，通过 InfluxDB3 Explorer 查看。
 
 > 本仓库是**源码仓库**（前端 + 后端 + 文档）。运行所需的若干组件需你在本机自行安装或准备——详见下方「仓库内含 / 需自准备」对照表。
 
@@ -27,9 +36,9 @@
 | **Node.js** | 运行前端（方式二） | 方式二必选 | 安装后 `npm install` |
 | **Redis** | 消息总线（必选；`BUS_TYPE` 目前仅支持 `redis`） | 必选 | 方式一由 compose 自动起；方式二用 `docker run redis` 或本机原生 |
 | **InfluxDB 3 Core** | 时序数据库（可选增强） | 可选 | 方式一由 compose 起；方式二官网下载原生二进制 |
-| **PlantSimulation** | 仿真数据来源 | 可选 | 自行安装（商业软件，不随仓库提供） |
+| **PlantSimulation** | 分析外挂（订阅 `source/state` 做预测/推演，已断开实时环） | 可选 | 自行安装（商业软件，不随仓库提供） |
 
-> 必选 = 后端 + 前端 + Redis（方式一由 compose 提供 Redis；方式二需你自备）。InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
+> 必选 = 后端 + 前端 + Redis（方式一由 compose 提供 Redis；方式二需你自备）。InfluxDB / Explorer 为可选增强；默认数据源是随仓库的 Python 实时仿真器（无需安装），PlantSimulation 为可选分析外挂。
 
 ## 快速开始
 
@@ -52,18 +61,18 @@ flowchart TB
         EXP[Explorer UI<br/>:8888 → 容器 :8080]
     end
 
-    PS[(PlantSimulation<br/>宿主 :30000)]
+    SRC[(数据源 Simulator<br/>宿主 :30000)]
 
     User -->|HTTP| FE
     User -->|HTTP| EXP
     FE <-->|WebSocket /ws| BE
     BE <-->|publish / subscribe| RD
-    BE <-->|TCP :30000| PS
+    SRC -->|TCP :30000 状态| BE
     BE -.->|best-effort 写入| IDB
     EXP <-->|host.docker.internal:18080| IDB
 ```
 
-> 跨网络说明：后端容器经 `host.docker.internal:30000` 连宿主上的 PlantSimulation（要求 PlantSim 监听 `0.0.0.0`）；Explorer 由浏览器经 `host.docker.internal:18080` 访问 InfluxDB。两条链路都依赖 Docker Desktop 的宿主网关解析。
+> 跨网络说明：后端容器（TCP 客户端）经 `host.docker.internal:30000` 连宿主上运行的数据源（默认 Python 实时仿真器，监听 `0.0.0.0:30000`）；Explorer 由浏览器经 `host.docker.internal:18080` 访问 InfluxDB。实时环为单向（数据源→后端），后端断线每 3s 自动重连。
 
 ---
 
@@ -198,11 +207,17 @@ npm run dev
 
 > 若本机 `5173` 被占用（常见于 Windows + WSL2 把该端口划为系统保留），可在 `frontend/vite.config.js` 改 `server.port`，或改用方式一的 Docker 前端（默认 8080，已避开常见保留段）。
 
-#### 6. PlantSimulation（仿真数据源，可选）
+#### 6. 数据源（实时仿真器，可选）
 
-1. 准备好仿真模型（`.spp` 不随仓库提供）。
-2. 运行仿真，类库中添加 Socket 。
-3. 确保 Socket 服务器已启动，监听 `30000` 端口。
+默认数据源是**随仓库的 Python 实时仿真器**（`connectors/sources/python_realtime.py`），无需安装任何商业软件：
+
+```bash
+python -m connectors.sources.python_realtime
+```
+
+它作为 TCP 服务端监听 `0.0.0.0:30000`，后端（Docker 内 TCP 客户端）经 `host.docker.internal:30000` 自动连上，断线后每 3s 重连。
+
+> 若要用 PlantSimulation 做离线预测/推演，把它当作**分析外挂**：订阅 `source/state` 只读消费，自行在 SimTalk 里做推演，不再接入实时控制环（`.spp` 模型不随仓库提供，需本机自行准备）。
 
 #### 7. 访问
 
@@ -221,9 +236,9 @@ npm run dev
 | InfluxDB 3 Core | 18080 | 18080 | 绑定 `0.0.0.0` |
 | InfluxDB3 Explorer | 8888 | 8888 | 映射 8888 → 容器 8080 |
 | Redis | 6379 | 6379 | 消息总线（必选） |
-| PlantSimulation | — | 30000 | 仿真 TCP 端口（可选） |
+| 数据源 Simulator | — | 30000 | 实时数据源 TCP 端口（可选，默认 Python 仿真器） |
 
-> 本机端口：`8080/8300/18080/8888/6379`（Docker）或 `5173/8300/18080/8888/6379`（原生）· `30000`(PlantSimulation)。若被占用，启动前需释放或改用其他端口。
+> 本机端口：`8080/8300/18080/8888/6379`（Docker）或 `5173/8300/18080/8888/6379`（原生）· `30000`(数据源 Simulator)。若被占用，启动前需释放或改用其他端口。
 
 ## Windows 端口保留排错
 
@@ -267,29 +282,25 @@ Explorer 后端运行在 Docker 容器内，通过 `http://host.docker.internal:
 
 ## 数据流
 
-两条主链路都经 Redis 消息总线流转：
+主链路经 Redis 消息总线流转（实时环为**单向**：数据源 → 后端 → 前端）：
 
-- **状态下行**：`PlantSimulation →(TCP:30000)→ 后端采集端 → publish "plant/state" →【Redis】→ subscribe → 后端订阅端 →(WebSocket:8300)→ 前端浏览器`
-- **指令上行**：`前端（POST /command）→ publish "plant/command" →【Redis】→ 后端采集端 →(TCP:30000)→ PlantSimulation`
+- **状态下行**：`数据源(Simulator) →(TCP:30000)→ 后端采集端（TCP 客户端，自动重连）→ publish "source/state" →【Redis】→ subscribe → 后端订阅端 →(WebSocket:8300)→ 前端浏览器`
+
+> 原「指令上行 / POST /command」控制通道已随架构解耦移除——后端不再向数据源回写指令。PlantSimulation 已降级为只读分析外挂：订阅 `source/state` 做预测/推演，不参与实时控制环。
 
 ```mermaid
 flowchart LR
-    PS[(PlantSimulation<br/>:30000)]
+    SRC[(数据源 Simulator<br/>:30000)]
     BE[后端 FastAPI<br/>采集 + 订阅]
-    BUS[(Redis Pub/Sub<br/>plant/state · plant/command)]
+    BUS[(Redis Pub/Sub<br/>source/state)]
     FE[前端浏览器<br/>:8080]
     IDB[(InfluxDB 3 Core<br/>:18080)]
     EXP[Explorer<br/>:8888]
 
-    PS -->|TCP :30000 状态| BE
-    BE -->|publish plant/state| BUS
+    SRC -->|TCP :30000 状态| BE
+    BE -->|publish source/state| BUS
     BUS -->|subscribe| BE
     BE -->|WebSocket :8300| FE
-
-    FE -->|POST /command 指令| BE
-    BE -->|publish plant/command| BUS
-    BUS -->|subscribe| BE
-    BE -->|TCP :30000 指令| PS
 
     BE -.->|best-effort 写入<br/>station_state / station_action| IDB
     IDB --> EXP
