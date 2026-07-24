@@ -54,9 +54,9 @@ const allModelInstances = [];
 async function loadAllModels() {
   // --- GLTF/GLB 设备模型 ---
   const configs = [
-    { url: "/models/assembleStation.glb", label: "组装工位", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
-    { url: "/models/telescopicFork.glb", label: "伸缩臂", count: 1, positions: [[-4,0,-5]] },
-    { url: "/models/weldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
+    { url: "/models/assembleStation.glb", label: "组装工位", count: 4, positions: [[5.5,0,-3],[12.5,0,-3],[19.5,0,-3],[26.5,0,-3]] },
+    { url: "/models/telescopicFork.glb", label: "伸缩臂", count: 1, positions: [[16,0,-7]] },
+    { url: "/models/weldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]] },
   ];
   for (const cfg of configs) {
     for (let i = 0; i < cfg.count; i++) {
@@ -139,7 +139,7 @@ let _labelsVisible = true;
 function toggleLabels() {
   _labelsVisible = !_labelsVisible;
   var btn = document.getElementById('btn-labels');
-  if (btn) btn.textContent = _labelsVisible ? '显示' : '隐藏';
+  if (btn) btn.textContent = _labelsVisible ? '隐藏标签' : '显示标签';
   allModelInstances.forEach(function(m) {
     m.traverse(function(ch) {
       if (ch.isCSS2DObject) {
