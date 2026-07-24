@@ -2,6 +2,23 @@
 
 基于 PlantSimulation 的 3D 数字孪生可视化系统。
 
+
+
+## 仿真说明
+
+本仓库**不包含** PlantSimulation 模型文件（\.spp\），原因：
+
+- PlantSimulation 是 Siemens 的商业闭源软件，其模型文件（\.spp\）属于用户的专有资产
+- 本仓库仅开源 Python 后端和前端可视化代码
+
+如需运行完整系统，请在 PlantSimulation 中：
+
+1. 任意创建一个仿真模型
+2. 在模型中启动 **Socket 服务器**（监听端口 30000）
+3. 使用 Socket 发送数据（格式参考 \simulation/scripts/\ 目录下的 SimTalk 脚本）
+4. 后端会自动接收并转发至前端
+
+也可以参考 \simulation/scripts/\ 中的示例，在自己的 PlantSimulation 模型中实现 Socket 通信。
 ## 项目结构
 
 | 目录 | 说明 |
