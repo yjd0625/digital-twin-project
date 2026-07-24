@@ -21,6 +21,7 @@ class PlantConnector:
     def connect(self) -> socket.socket:
         """建立 TCP 连接，返回 socket 对象"""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(5.0)  # 设置超时，避免 recv 永久阻塞
         self.sock.connect((PLANT_HOST, PLANT_PORT))
         self._connected = True
         logger.info("Connected to PlantSimulation at %s:%s", PLANT_HOST, PLANT_PORT)

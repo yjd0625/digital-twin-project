@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数字孪生系统 — 模块文档</title>
+<style>
+  :root {
+    --accent: #3b82f6;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --green: #22c55e;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --code: #0d1117;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+    padding: 48px 40px 40px;
+    border-bottom: 1px solid var(--surface2);
+    text-align: center;
+  }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+  header p  { color: var(--muted); font-size: 15px; margin-top: 8px; }
+
+  /* ── Layout ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 40px;
+    border: 1px solid var(--surface2);
+  }
+  .toc h2 { font-size: 16px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; }
+  .toc ul { list-style: none; columns: 2; column-gap: 32px; }
+  .toc li { break-inside: avoid; margin-bottom: 6px; }
+  .toc a { color: var(--accent); text-decoration: none; font-size: 14px; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Section ── */
+  section { margin-bottom: 48px; }
+  h2.section-title {
+    font-size: 22px; font-weight: 700;
+    padding-bottom: 8px; margin-bottom: 20px;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+
+  /* ── Module card ── */
+  .module {
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--surface2);
+    padding: 24px 28px;
+    margin-bottom: 20px;
+  }
+  .module h3 {
+    font-size: 18px; font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .module .path {
+    font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--code);
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  .module .desc { font-size: 15px; color: var(--text); margin-bottom: 14px; }
+  .module .api { margin-bottom: 12px; }
+  .module .api summary {
+    cursor: pointer; font-weight: 600; font-size: 14px;
+    color: var(--accent); user-select: none;
+  }
+  .module .api table {
+    width: 100%; border-collapse: collapse; margin-top: 8px;
+    font-size: 13px;
+  }
+  .module .api th, .module .api td {
+    text-align: left; padding: 6px 10px;
+    border-bottom: 1px solid var(--surface2);
+    vertical-align: top;
+  }
+  .module .api th { color: var(--muted); font-weight: 600; width: 140px; }
+  .module .api td code {
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 12.5px;
+    background: var(--code);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #f0c674;
+  }
+  .module .tag {
+    display: inline-block;
+    font-size: 11px; font-weight: 700; padding: 1px 8px;
+    border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  }
+  .tag.frontend { background: #1e40af22; color: #60a5fa; border: 1px solid #1e40af44; }
+  .tag.backend  { background: #16653422; color: #4ade80; border: 1px solid #16653444; }
+  .tag.script   { background: #854d0e22; color: #fbbf24; border: 1px solid #854d0e44; }
+  .tag.dataflow { background: #7c3aed22; color: #c084fc; border: 1px solid #7c3aed44; }
+  .tag.sim      { background: #9f123922; color: #fb7185; border: 1px solid #9f123944; }
+
+  .changelog { color: var(--muted); font-size: 13px; margin-top: 8px; border-top: 1px solid var(--surface2); padding-top: 8px; }
+
+  /* ── Dir tree ── */
+  .tree { font-family: "JetBrains Mono", monospace; font-size: 13px; background: var(--code); padding: 16px 20px; border-radius: 8px; line-height: 1.8; color: var(--muted); margin-bottom: 32px; }
+  .tree .hl { color: #e2e8f0; font-weight: 600; }
+  .tree .cmt { color: #6b7280; font-style: italic; }
+  .tree .fp  { color: #60a5fa; }
+  .tree .fd  { color: #f0c674; }
+
+  /* ── Footer ── */
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 32px 24px; border-top: 1px solid var(--surface2); }
+
+  /* ── Misc ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .tag-s { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; display: inline-block; margin-right: 4px; }
+  .tag-e { background: #1e3a5f; color: #93c5fd; }
+  .tag-f { background: #1e40af22; color: #60a5fa; }
+
+  @media (max-width: 720px) { .toc ul { columns: 1; } .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔧 PlantSimulation 数字孪生 · 模块文档</h1>
+  <p>想改什么功能，来这里查对应文件</p>
+</header>
+
+<div class="container">
+
+<!-- ───── TOC ───── -->
+<div class="toc">
+<h2>目录</h2>
+<ul>
+  <li><a href="#proj">项目结构总览</a></li>
+  <li><a href="#frontend">前端模块</a></li>
+  <li><a href="#fe-main">main.js — 应用入口</a></li>
+  <li><a href="#fe-scene">scene.js — 3D 场景</a></li>
+  <li><a href="#fe-models">models.js — 模型加载</a></li>
+  <li><a href="#fe-data">data_handler.js — 数据驱动</a></li>
+  <li><a href="#fe-ui">ui.js — 界面交互</a></li>
+  <li><a href="#fe-interaction">interaction.js — 模型操作</a></li>
+  <li><a href="#fe-importer">importer.js — 持久化 &amp; 视角</a></li>
+  <li><a href="#fe-html">index.html — 页面结构</a></li>
+  <li><a href="#fe-config">vite.config.js / package.json</a></li>
+  <li><a href="#backend">后端模块</a></li>
+  <li><a href="#scripts">工具脚本</a></li>
+  <li><a href="#sim">PlantSimulation 仿真脚本</a></li>
+</ul>
+</div>
+
+<!-- ═══════════════ 项目结构 ═══════════════ -->
+<section id="proj">
+<h2 class="section-title">项目结构总览</h2>
+<div class="tree">
+digital-twin-project/<br>
+├── <span class="hl">frontend/</span>          <span class="cmt"># 【主要】3D 可视化前端（Vite + Three.js）</span><br>
+│   ├── <span class="fd">src/</span><br>
+│   │   ├── <span class="fp">main.js</span>            <span class="cmt">── 入口：组装所有模块、加载模型、WebSocket</span><br>
+│   │   ├── <span class="fp">scene.js</span>           <span class="cmt">── 创建 Three.js 场景、相机、灯光、网格</span><br>
+│   │   ├── <span class="fp">models.js</span>          <span class="cmt">── 加载 GLTF/DXF 模型、克隆实例</span><br>
+│   │   ├── <span class="fp">data_handler.js</span>    <span class="cmt">── 接收后端数据，驱动模型状态变化</span><br>
+│   │   ├── <span class="fp">ui.js</span>              <span class="cmt">── 按钮绑定、信息面板</span><br>
+│   │   ├── <span class="fp">interaction.js</span>     <span class="cmt">── 鼠标选中/拖拽、键盘操作、删除</span><br>
+│   │   └── <span class="fp">importer.js</span>         <span class="cmt">── 视角切换、位置持久化（localStorage）</span><br>
+│   ├── <span class="fd">public/</span><br>
+│   │   ├── <span class="fd">models/</span>            <span class="cmt">── .glb / .dxf 模型文件</span><br>
+│   │   ├── <span class="fd">draco/</span>             <span class="cmt">── Draco 解码器（压缩模型解压）</span><br>
+│   │   ├── <span class="fd">meshopt/</span>           <span class="cmt">── Meshopt 解码器（压缩模型解压）</span><br>
+│   │   └── <span class="fd">textures/</span>          <span class="cmt">── 纹理贴图</span><br>
+│   ├── <span class="fp">index.html</span>           <span class="cmt">── HTML 骨架：按钮、工具栏、状态栏</span><br>
+│   ├── <span class="fp">vite.config.js</span>      <span class="cmt">── Vite 构建配置</span><br>
+│   └── <span class="fp">package.json</span>         <span class="cmt">── 依赖：three.js, dxf-parser, vite</span><br>
+├── <span class="hl">backend/</span>           <span class="cmt"># Python 后端：WebSocket 服务器 + PlantSim 连接</span><br>
+│   └── <span class="fd">src/</span><br>
+│       ├── <span class="fp">main.py</span>              <span class="cmt">── 主入口：启动 WS 服务器 &amp; 接收循环</span><br>
+│       ├── <span class="fp">websocket_handler.py</span>  <span class="cmt">── 管理前端 WS 连接、广播消息</span><br>
+│       ├── <span class="fp">data_processor.py</span>     <span class="cmt">── 解析 PlantSimulation 数据</span><br>
+│       ├── <span class="fp">plant_connector.py</span>    <span class="cmt">── 与 PlantSim 的 TCP Socket 通信</span><br>
+│       ├── <span class="fp">config.py</span>            <span class="cmt">── 所有端口 / IP / 日志 配置</span><br>
+│       └── <span class="fp">__init__.py</span><br>
+├── <span class="hl">simulation/</span>        <span class="cmt"># PlantSimulation 仿真文件</span><br>
+│   ├── <span class="fd">models/</span>               <span class="cmt">── .spp 仿真模型</span><br>
+│   └── <span class="fd">scripts/</span>              <span class="cmt">── SimTalk 脚本示例（数据发送/接收）</span><br>
+├── <span class="hl">scripts/</span>           <span class="cmt"># 启动脚本</span><br>
+│   ├── <span class="fp">start_frontend.bat</span>    <span class="cmt">── 一键启动前端（http://localhost:5173）</span><br>
+│   └── <span class="fp">start_backend.bat</span>     <span class="cmt">── 一键启动后端（ws://localhost:8765）</span><br>
+│
+└── <span class="fd">docs/</span>                <span class="cmt">── 文档（你正在看的这个文件）</span>
+</div>
+</section>
+
+<!-- ═══════════════ 前端 ═══════════════ -->
+<section id="frontend">
+<h2 class="section-title">前端模块 <span class="tag frontend">frontend/src/</span></h2>
+<p style="color:var(--muted);margin-bottom:20px;">前端基于 Vite + Three.js (v0.160.1)，所有源代码在 <code style="background:var(--code);padding:2px 8px;border-radius:4px;">frontend/src/</code> 下。</p>
+</section>
+
+<!-- ── main.js ── -->
+<section id="fe-main">
+<div class="module">
+<h3>main.js <span class="tag frontend">应用入口</span></h3>
+<div class="path">frontend/src/main.js</div>
+<div class="desc">整个应用的<b>胶水模块</b>。它把其他所有模块串联起来：初始化场景 → 加载模型 → 启动 WebSocket → 绑定 UI → 进入渲染循环。这个文件不写具体业务逻辑，只负责"谁先谁后"。</div>
+
+<div class="api">
+<details open>
+<summary>📦 它做了哪些事（按顺序）</summary>
+<table>
+<tr><th>顺序</th><th>做的事</th><th>想改这里…</th></tr>
+<tr><td>1</td><td>创建 Three.js 场景、相机、渲染器、轨道控制器</td><td>改场景背景色、灯光位置 → <b>scene.js</b></td></tr>
+<tr><td>2</td><td>绘制左下角固定坐标轴（XYZ 轴 + 标签）</td><td>坐标轴大小/位置 → 直接在 <b>main.js</b> 的"固定坐标轴"段修改</td></tr>
+<tr><td>3</td><td>定义模型配置（url / 标签 / 数量 / 位置）</td><td><b>增加/删除/移动设备</b> → 改 <code>configs</code> 数组</td></tr>
+<tr><td>4</td><td>加载模型模板 → 克隆实例 → 添加到场景</td><td>改加载方式 → <b>models.js</b></td></tr>
+<tr><td>5</td><td>建立 WebSocket 连接、定义收发函数</td><td>改服务器地址/端口/重连逻辑 → 直接在 <b>main.js</b> 的 <code>connectWebSocket</code> 段</td></tr>
+<tr><td>6</td><td>初始化 importer / UI / dataHandler / interaction</td><td>改对应功能 → 各自模块文件</td></tr>
+<tr><td>7</td><td>加载完成后自动调整相机视角到全场景</td><td>改初始相机位置 → 直接在 <b>main.js</b> 的 <code>loadAllModels().then()</code> 段</td></tr>
+<tr><td>8</td><td>注册全局错误捕获、窗口自适应</td><td>—</td></tr>
+<tr><td>9</td><td>启动 requestAnimationFrame 渲染循环</td><td>—</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>🔌 关键变量 / 函数</summary>
+<table>
+<tr><th>名称</th><th>说明</th><th>备注</th></tr>
+<tr><td><code>allModelInstances[]</code></td><td>所有模型实例的数组，全局共享</td><td>其他模块通过这个数组遍历模型</td></tr>
+<tr><td><code>loadAllModels()</code></td><td>异步加载所有 GLTF + DXF 模型</td><td>两阶段：先加载模板 → 再 .clone()</td></tr>
+<tr><td><code>connectWebSocket()</code></td><td>连接 ws://localhost:8765，自动重连</td><td>收到消息 → dataHandler.process()</td></tr>
+<tr><td><code>sendCommand(msg)</code></td><td>向后端发送控制指令字符串</td><td>被 UI 按钮调用</td></tr>
+<tr><td><code>toggleLabels()</code></td><td>切换所有 CSS2D 标签显隐</td><td>绑定到"隐藏标签"按钮</td></tr>
+<tr><td><code>animate()</code></td><td>主渲染循环</td><td>每帧更新 OrbitControls + 坐标轴 + 视角过渡</td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── scene.js ── -->
+<section id="fe-scene">
+<div class="module">
+<h3>scene.js <span class="tag frontend">3D 场景工厂</span></h3>
+<div class="path">frontend/src/scene.js</div>
+<div class="desc">创建 Three.js 渲染核心：场景、透视相机、WebGL 渲染器、CSS2D 标签渲染器、轨道控制器、灯光（环境光 + 两方向光）、地面网格。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出</summary>
+<table>
+<tr><th>导出名</th><th>参数</th><th>返回</th><th>说明</th></tr>
+<tr><td><code>createScene</code></td><td><code>container: HTMLElement</code></td><td><code>{ scene, camera, renderer, labelRenderer, controls }</code></td><td>传入 body 或任意 div，返回所有 3D 核心对象</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>换背景颜色</td><td><code>scene.background = new THREE.Color(0x111122)</code></td></tr>
+<tr><td>调光源方向/强度</td><td><code>dirLight.position.set(...)</code> / <code>.intensity</code></td></tr>
+<tr><td>改相机初始位置</td><td><code>camera.position.set(5, 5, 10)</code></td></tr>
+<tr><td>取消/调整 OrbitControls 阻尼</td><td><code>controls.enableDamping = true</code> → false</td></tr>
+<tr><td>改网格范围/颜色</td><td><code>new THREE.GridHelper(70, 30, 0x88aaff, 0x335588)</code></td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── models.js ── -->
+<section id="fe-models">
+<div class="module">
+<h3>models.js <span class="tag frontend">模型加载 &amp; 实例化</span></h3>
+<div class="path">frontend/src/models.js</div>
+<div class="desc">负责从 <code>/models/</code> 加载 GLTF/GLB 和 DXF 文件。优化策略：每个 .glb 文件只 HTTP 加载一次作为"模板"，后续实例通过 <code>.clone()</code> 创建（共享 GPU geometry/material）。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出</summary>
+<table>
+<tr><th>导出名</th><th>参数</th><th>返回</th><th>说明</th></tr>
+<tr><td><code>loadGLTFTemplate(url)</code></td><td>url: string</td><td><code>THREE.Group</code></td><td>仅加载一次，返回原始 scene <b>不</b>做位置/标签等设置</td></tr>
+<tr><td><code>createInstanceFromTemplate(template, options)</code></td><td>template: Group, options: 见下</td><td><code>THREE.Group</code></td><td>从模板 .clone() + 设置位置/标签/阴影</td></tr>
+<tr><td><code>loadDXFModel(scene, url, options)</code></td><td>scene, url, options</td><td><code>THREE.Group | null</code></td><td>解析 DXF 为 LineSegments + 透明点击面</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>⚙️ createInstanceFromTemplate 的 options</summary>
+<table>
+<tr><th>选项</th><th>类型</th><th>默认</th><th>说明</th></tr>
+<tr><td><code>position</code></td><td>[x, y, z]</td><td>[0,0,0]</td><td>世界坐标位置</td></tr>
+<tr><td><code>rotateX</code></td><td>number</td><td>—</td><td>绕 X 轴旋转（弧度），通常 <code>-Math.PI/2</code></td></tr>
+<tr><td><code>scale</code></td><td>number</td><td>1</td><td>整体缩放</td></tr>
+<tr><td><code>label</code></td><td>string</td><td>—</td><td>模型头顶标签文字（不传则无标签）</td></tr>
+<tr><td><code>labelOffset</code></td><td>number</td><td>0.5</td><td>标签相对模型顶部的上移距离</td></tr>
+<tr><td><code>autoAlignGround</code></td><td>boolean</td><td>true</td><td>是否自动落在地面（y=0）</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>换模型文件（.glb）</td><td>在 <b>main.js</b> 的 <code>configs</code> 数组里改 <code>url</code></td></tr>
+<tr><td>改标签样式</td><td><code>setupModelInstance()</code> 中的 <code>div.style.*</code></td></tr>
+<tr><td>加 Draco 或去掉 Meshopt 解码器</td><td><code>createGLTFLoader()</code> 里增减 <code>setDRACOLoader / setMeshoptDecoder</code></td></tr>
+<tr><td>改 DXF 解析精度</td><td><code>loadDXFModel()</code> 中的曲线分段数（如 CIRCLE 的 <code>16</code>）</td></tr>
+<tr><td>落地不对齐</td><td><code>autoAlignGround: false</code></td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── data_handler.js ── -->
+<section id="fe-data">
+<div class="module">
+<h3>data_handler.js <span class="tag frontend">数据 → 模型驱动</span></h3>
+<div class="path">frontend/src/data_handler.js</div>
+<div class="desc">后端推送 JSON 数据后，<code>DataHandler.process()</code> 被调用，根据设备 id 找到对应模型，修改颜色、位置、标签文本。这是"数字孪生"的核心——数据动，模型动。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出 &amp; API</summary>
+<table>
+<tr><th>名称</th><th>说明</th></tr>
+<tr><td><code>class DataHandler</code></td><td>构造时传入 <code>{ objects: {}, updateInfo: fn }</code></td></tr>
+<tr><td><code>.process(data)</code></td><td>入口：解析 JSON，驱动所有模型</td></tr>
+<tr><td><code>.findModelById(id)</code></td><td>从 <code>this.objects[id]</code> 查找模型</td></tr>
+<tr><td><code>.applyStatus(model, status)</code></td><td>状态 → 颜色（绿色运行/蓝色空闲/红色停止/橙色故障）</td></tr>
+<tr><td><code>.applyPosition(model, pos)</code></td><td>更新模型 x/z 坐标</td></tr>
+<tr><td><code>.updateLabel(model, text)</code></td><td>更新 CSS2D 标签文字</td></tr>
+<tr><td><code>.applyTemperature(model, temp)</code></td><td>温度 → 颜色渐变（20°C 蓝 → 60°C 绿 → 100°C 红）</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>💡 收到的 JSON 格式</summary>
+<pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;margin-top:8px;overflow-x:auto;">
+{
+  "stations": [
+    { "id": "assembleStation_1", "status": "running", "parts": 42, "temp": 65.3 },
+    { "id": "telescopicFork",    "status": "moving",  "x": 1.5, "z": 2.0 }
+  ],
+  "lineSpeed": 12.5,
+  "timestamp": 1700000000
+}</pre>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>新增一种状态颜色</td><td>在 <code>STATUS_COLORS</code> 对象加一行</td></tr>
+<tr><td>添加新的数据驱动方式（如报警）</td><td>在 <code>.process()</code> 的"逐个设备驱动"循环里加新判断</td></tr>
+<tr><td>改温度映射范围</td><td><code>applyTemperature()</code> 中的 <code>(temp - 20) / 80</code></td></tr>
+<tr><td>改标签显示内容</td><td><code>.updateLabel()</code> 中 <code>ch.element.textContent = text</code></td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── ui.js ── -->
+<section id="fe-ui">
+<div class="module">
+<h3>ui.js <span class="tag frontend">按钮 &amp; 信息面板</span></h3>
+<div class="path">frontend/src/ui.js</div>
+<div class="desc">绑定 HTML 按钮的点击事件，读取信息面板 <code>#info</code> 元素更新文本。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出</summary>
+<table>
+<tr><th>导出名</th><th>说明</th></tr>
+<tr><td><code>setupUI(controls, sendCommand, extra)</code></td><td>绑定所有按钮事件，返回 <code>{ updateInfo }</code></td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>🔘 绑定的按钮 ID（定义在 index.html）</summary>
+<table>
+<tr><th>button ID</th><th>行为</th><th>说明</th></tr>
+<tr><td><code>btn-start</code></td><td><code>sendCommand('START')</code></td><td>启动仿真</td></tr>
+<tr><td><code>btn-stop</code></td><td><code>sendCommand('STOP')</code></td><td>暂停仿真</td></tr>
+<tr><td><code>btn-speed</code></td><td><code>sendCommand('SPEED:20')</code></td><td>加速</td></tr>
+<tr><td><code>btn-top</code></td><td><code>extra.onView('top')</code></td><td>俯视视角</td></tr>
+<tr><td><code>btn-front</code></td><td><code>extra.onView('front')</code></td><td>正视视角</td></tr>
+<tr><td><code>btn-side</code></td><td><code>extra.onView('side')</code></td><td>侧视视角</td></tr>
+<tr><td><code>btn-default</code></td><td><code>extra.onView('default')</code></td><td>默认视角</td></tr>
+<tr><td><code>btn-reset</code></td><td><code>extra.onReset()</code></td><td>模型复位到初始位置</td></tr>
+<tr><td><code>btn-labels</code></td><td><code>extra.onToggleLabels()</code></td><td>显示/隐藏所有标签</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>新增一个按钮</td><td>在 <b>index.html</b> 加 button + 在 <b>ui.js</b> 的 <code>setupUI</code> 绑定事件</td></tr>
+<tr><td>改发送的指令内容</td><td><code>sendCommand('xxx')</code> 里的字符串</td></tr>
+<tr><td>改信息面板样式</td><td>index.html 中 <code>#info</code> 的 CSS</td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── interaction.js ── -->
+<section id="fe-interaction">
+<div class="module">
+<h3>interaction.js <span class="tag frontend">模型交互</span></h3>
+<div class="path">frontend/src/interaction.js</div>
+<div class="desc">鼠标点选模型、Shift+拖拽移动模型、键盘快捷键微调位置/旋转/缩放、Delete 删除模型。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出</summary>
+<table>
+<tr><th>名称</th><th>说明</th></tr>
+<tr><td><code>initInteraction(ctx, importer)</code></td><td>初始化所有交互事件，返回 <code>{ selectObject, deselectAll, updateSelectionBoxes }</code></td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>⌨️ 键盘快捷键一览</summary>
+<table>
+<tr><th>按键</th><th>行为</th></tr>
+<tr><td>↑ ↓ ← →</td><td>沿 X / Z 轴移动选中模型（步长 0.1）</td></tr>
+<tr><td>Q / E</td><td>绕 Y 轴旋转（-15° / +15°）</td></tr>
+<tr><td>A / D</td><td>绕 X 轴旋转</td></tr>
+<tr><td>Z / C</td><td>绕 Z 轴旋转</td></tr>
+<tr><td>[ / ]</td><td>缩小 / 放大（0.9x / 1.1x）</td></tr>
+<tr><td>Delete</td><td>删除选中模型 + 其 CSS2D 标签</td></tr>
+<tr><td>Shift + 左键拖拽</td><td>在水平面拖拽移动模型</td></tr>
+<tr><td>Ctrl + 点击</td><td>多选（再次点击取消选择）</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>改移动步长 / 旋转角度</td><td><code>MOVE_STEP</code> / <code>ROT_STEP</code> 常量</td></tr>
+<tr><td>新增快捷键</td><td>在 <code>KEY_ACTIONS</code> 对象里加映射</td></tr>
+<tr><td>改拖拽平面</td><td><code>_dragPlane</code> 的法线方向</td></tr>
+<tr><td>删除时做额外处理</td><td>键盘事件的 <code>Delete</code> 分支</td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── importer.js ── -->
+<section id="fe-importer">
+<div class="module">
+<h3>importer.js <span class="tag frontend">视角切换 &amp; 持久化</span></h3>
+<div class="path">frontend/src/importer.js</div>
+<div class="desc">两个功能在一个模块里：① 预设视角（俯/正/侧/默认）之间的平滑过渡动画；② 模型位置/旋转/缩放的 <code>localStorage</code> 持久化（刷新页面后恢复上次布局）。</div>
+
+<div class="api">
+<details open>
+<summary>📤 导出</summary>
+<table>
+<tr><th>返回的方法</th><th>说明</th></tr>
+<tr><td><code>setView(name)</code></td><td>切换到预设视角（<code>top</code> / <code>front</code> / <code>side</code> / <code>default</code>）</td></tr>
+<tr><td><code>updateViewTransition()</code></td><td>每帧调用，平滑 lerp 到目标视角</td></tr>
+<tr><td><code>cancelViewTransition()</code></td><td>用户操作时打断视角动画</td></tr>
+<tr><td><code>savePositions()</code></td><td>将所有模型变换保存到 localStorage</td></tr>
+<tr><td><code>loadPositions()</code></td><td>从 localStorage 恢复模型变换</td></tr>
+<tr><td><code>saveDefaultTransforms()</code></td><td>保存当前变换为"复位"默认值</td></tr>
+<tr><td><code>resetPositions()</code></td><td>恢复到保存的默认变换并持久化</td></tr>
+</table>
+</details>
+</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>新增一个视角预设</td><td>在 <code>VIEW_PRESETS</code> 对象加一项</td></tr>
+<tr><td>改视角过渡速度</td><td><code>lerp(target, 0.12)</code> 的第二个参数（0~1，越大越快）</td></tr>
+<tr><td>改 localStorage key</td><td><code>dt_model_transforms</code> 字符串</td></tr>
+<tr><td>模型数量不匹配时不清除旧数据</td><td><code>loadPositions</code> 的 <code>data.length !== allModelInstances.length</code> 分支</td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── index.html ── -->
+<section id="fe-html">
+<div class="module">
+<h3>index.html <span class="tag frontend">页面骨架</span></h3>
+<div class="path">frontend/index.html</div>
+<div class="desc">Vite 入口 HTML。定义状态栏 <code>#info</code>、工具栏 <code>#toolbar</code>、控制按钮 <code>#controls</code> 的所有 DOM 结构及基础 CSS 样式。</div>
+
+<div class="api">
+<details>
+<summary>✏️ 想改这些，来这里</summary>
+<table>
+<tr><th>需求</th><th>改什么</th></tr>
+<tr><td>改按钮文字/顺序/颜色</td><td>直接改 HTML + style 里的 <code>#btn-start</code> 等</td></tr>
+<tr><td>调整布局（按钮位置/间距）</td><td><code>#toolbar</code> / <code>#controls</code> 的 CSS（flex, position, gap）</td></tr>
+<tr><td>加标题/LOGO</td><td>在 body 内加元素</td></tr>
+</table>
+</details>
+</div>
+</div>
+</section>
+
+<!-- ── config files ── -->
+<section id="fe-config">
+<div class="module">
+<h3>构建配置 <span class="tag frontend">vite / npm</span></h3>
+<div class="path">frontend/vite.config.js &amp; package.json</div>
+<div class="desc">
+  <code>vite.config.js</code> 设置开发服务器端口 5173 和构建输出目录。<br>
+  <code>package.json</code> 中 <code>dependencies</code> 只有 <code>three</code> 和 <code>dxf-parser</code>，dev 依赖 <code>vite</code>。
+  <code>npm run dev</code> 启动开发服务器，<code>npm run build</code> 打包到 <code>dist/</code>。
+</div>
+</div>
+</section>
+
+
+<!-- ═══════════════ 后端 ═══════════════ -->
+<section id="backend">
+<h2 class="section-title">后端模块 <span class="tag backend">backend/src/</span></h2>
+<p style="color:var(--muted);margin-bottom:20px;">Python 后端，功能：连接 PlantSimulation 的 TCP Socket，接收仿真数据，解析后通过 WebSocket 广播给前端。</p>
+
+<div class="grid-2">
+
+<div class="module">
+<h4>main.py <span class="tag backend">主入口</span></h4>
+<div class="path">backend/src/main.py</div>
+<div class="desc">
+  <code>asyncio.run(main())</code> 启动：<br>
+  ① 启动 WebSocket 服务器 <code>ws://localhost:8765</code><br>
+  ② 连接 PlantSimulation TCP <code>127.0.0.1:30000</code><br>
+  ③ 循环接收 PlantSim 数据 → 解析 → 广播给前端
+</div>
+</div>
+
+<div class="module">
+<h4>websocket_handler.py <span class="tag backend">WS 连接管理</span></h4>
+<div class="path">backend/src/websocket_handler.py</div>
+<div class="desc">
+  <code>WebSocketHandler</code> 类维护前端连接的 <code>set</code>：<br>
+  · <code>handle_client()</code> — 新前端连接/断开<br>
+  · <code>broadcast(data)</code> — 向所有前端发 JSON
+</div>
+</div>
+
+<div class="module">
+<h4>plant_connector.py <span class="tag backend">PlantSim 通信</span></h4>
+<div class="path">backend/src/plant_connector.py</div>
+<div class="desc">
+  <code>PlantConnector</code> 管理到 PlantSimulation 的 TCP 持久连接：<br>
+  · <code>.connect()</code> / <code>.send()</code> / <code>.recv()</code> / <code>.close()</code><br>
+  阻塞接收，在 asyncio 线程池中执行。
+</div>
+</div>
+
+<div class="module">
+<h4>data_processor.py <span class="tag backend">数据解析</span></h4>
+<div class="path">backend/src/data_processor.py</div>
+<div class="desc">
+  <code>DataProcessor.parse(raw)</code> 尝试 JSON 解析，失败则按逗号分隔格式兜底。
+</div>
+</div>
+
+<div class="module">
+<h4>config.py <span class="tag backend">配置中心</span></h4>
+<div class="path">backend/src/config.py</div>
+<div class="desc">
+  所有可配置项集中在这里：<br>
+  · PlantSim host/port: <code>127.0.0.1:30000</code><br>
+  · WS server host/port: <code>localhost:8765</code><br>
+  · 日志级别<br>
+  支持 <code>os.getenv()</code> 环境变量覆盖。
+</div>
+</div>
+
+<div class="module">
+<h4>requirements.txt <span class="tag backend">Python 依赖</span></h4>
+<div class="path">backend/requirements.txt</div>
+<div class="desc">唯一外部依赖是 <code>websockets</code>（标准库 <code>asyncio</code> / <code>json</code> / <code>socket</code> / <code>logging</code> 均为内置）。</div>
+</div>
+
+</div>
+
+<div class="api" style="margin-top:20px;">
+<details>
+<summary>📡 数据流（从仿真到前端）</summary>
+<pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">
+PlantSimulation
+    │  SimTalk 脚本：socket.SendLine("machine_01,TEMP,85.2")
+    ▼  TCP :30000
+plant_connector.py   ← 阻塞 recv()
+    │
+    ▼
+data_processor.py   ← parse() 转为 dict
+    │
+    ▼
+websocket_handler.py ← broadcast() 对所有前端发 JSON
+    │  ws://localhost:8765
+    ▼
+浏览器前端 (main.js)
+    │  ws.onmessage → dataHandler.process(data)
+    ▼
+3D 模型颜色/位置/标签更新
+</pre>
+</details>
+</div>
+</section>
+
+
+<!-- ═══════════════ 脚本 ═══════════════ -->
+<section id="scripts">
+<h2 class="section-title">工具脚本 <span class="tag script">scripts/</span></h2>
+
+<div class="grid-2">
+
+<div class="module">
+<h4>start_frontend.bat <span class="tag script">启动前端</span></h4>
+<div class="path">scripts/start_frontend.bat</div>
+<div class="desc">自动 <code>npm install</code>（若 node_modules 不存在），然后 <code>npm run dev</code> 启动 Vite 开发服务器。</div>
+</div>
+
+<div class="module">
+<h4>start_backend.bat <span class="tag script">启动后端</span></h4>
+<div class="path">scripts/start_backend.bat</div>
+<div class="desc">调用 Miniconda 环境 <code>DT</code> 下的 Python 执行 <code>python -m src.main</code>。提示连接信息。</div>
+</div>
+
+<div class="module">
+<h4>test_connection.py <span class="tag script">后端连接测试</span></h4>
+<div class="path">scripts/test_connection.py</div>
+<div class="desc">独立脚本，用于验证后端是否正确接收和转发数据。</div>
+</div>
+
+</div>
+</section>
+
+
+<!-- ═══════════════ PlantSim ═══════════════ -->
+<section id="sim">
+<h2 class="section-title">PlantSimulation 脚本 <span class="tag sim">simulation/</span></h2>
+
+<div class="grid-2">
+
+<div class="module">
+<h4>data_sender.txt <span class="tag sim">数据发送示例</span></h4>
+<div class="path">simulation/scripts/data_sender.txt</div>
+<div class="desc">SimTalk 示例脚本，演示如何用 <code>Socket.Create</code> 向 Python 后端发送仿真数据（如设备温度）。</div>
+</div>
+
+<div class="module">
+<h4>command_receiver.txt <span class="tag sim">指令接收示例</span></h4>
+<div class="path">simulation/scripts/command_receiver.txt</div>
+<div class="desc">SimTalk 示例脚本，演示如何接收来自前端的控制指令（START/STOP/SPEED）。</div>
+</div>
+
+<div class="module">
+<h4>main_model.spp <span class="tag sim">仿真模型</span></h4>
+<div class="path">simulation/models/main_model.spp</div>
+<div class="desc">PlantSimulation 仿真模型文件（需 PlantSim 软件打开）。</div>
+</div>
+
+</div>
+</section>
+
+
+<!-- ═══════════════ 快速查找 ═══════════════ -->
+<section>
+<h2 class="section-title">🔍 快速查找：我想改什么</h2>
+
+<div class="module">
+<table style="width:100%;font-size:14px;border-collapse:collapse;">
+<tr style="border-bottom:2px solid var(--accent);"><th style="text-align:left;padding:8px 12px;">需求</th><th style="text-align:left;padding:8px 12px;">文件</th></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">增加/删除/移动 3D 设备</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>main.js</b> → <code>configs</code> 数组</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">更换设备模型（.glb 文件）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>main.js</b> 的 <code>configs</code> + <b>public/models/</b> 文件</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改模型加载的解码器（Draco/Meshopt）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>models.js</b> → <code>createGLTFLoader()</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改标签样式（字体/颜色/背景）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>models.js</b> → <code>setupModelInstance()</code> 中 <code>div.style.*</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改场景背景色/灯光/网格</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>scene.js</b></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改 WebSocket 地址/端口</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>main.js</b> + <b>backend/src/config.py</b></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">新增状态颜色（如"待料"）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>data_handler.js</b> → <code>STATUS_COLORS</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改温度颜色映射</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>data_handler.js</b> → <code>applyTemperature()</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">新增一个 UI 按钮</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>index.html</b> + <b>ui.js</b></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改按钮发送的指令内容</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>ui.js</b> → <code>sendCommand('...')</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改键盘快捷键/操作</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>interaction.js</b> → <code>KEY_ACTIONS</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">新增视角预设</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>importer.js</b> → <code>VIEW_PRESETS</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改视角过渡速度</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>importer.js</b> → <code>lerp(..., 0.12)</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改后端监听端口</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>backend/src/config.py</b></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">改 PlantSimulation 连接地址</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>backend/src/config.py</b></td></tr>
+</table>
+</div>
+</section>
+
+</div>
+
+<footer>
+  文档生成于 2026-07-03 &nbsp;·&nbsp; 项目文件如有更新，重新生成即可
+</footer>
+
+</body>
+</html>

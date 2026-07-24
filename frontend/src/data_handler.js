@@ -17,7 +17,7 @@
  */
 
 // ---------- 状态 → 颜色映射表 ----------
-var STATUS_COLORS = {
+const STATUS_COLORS = {
   running: 0x00ff88,   // 运行中 → 绿色
   idle:    0x4488ff,   // 空闲   → 蓝色
   stopped: 0xff4444,   // 停止   → 红色
@@ -34,30 +34,33 @@ var STATUS_COLORS = {
  */
 export class DataHandler {
   constructor(ctx = {}) {
-    // 将传入的对象直接赋值给 this.objects
-    this.objects = ctx.objects || {};      // 后续用 dataHandler.objects
-    this.updateInfo = ctx.updateInfo || (() => {}); // 占位函数
+    this.allModelInstances = ctx.allModelInstances || [];  // 持有模型数组引用，用于 findModelById
+    this.objects = ctx.objects || {};                      // 向后兼容，预留直接注册接口
+    this.updateInfo = ctx.updateInfo || (() => {});
     this.latestData = null;
   }
 
 
   // ======================== 入口：收到后端数据 ========================
   process(data) {
-    this.latestData = data;
+    const self = this;  // 保留引用，防止嵌套回调中 this 丢失
+    self.latestData = data;
     console.log("data_handler 收到:", data);
 
     // 【第一步】整体产线参数（如线速度）
     if (data.lineSpeed !== undefined) {
-      this.updateInfo("线速度: " + data.lineSpeed.toFixed(1) + " m/s");
+      self.updateInfo("线速度: " + data.lineSpeed.toFixed(1) + " m/s");
     }
 
     // 【第二步】逐个设备驱动
     if (data.stations && Array.isArray(data.stations)) {
-      var self = this;
-      for (var station of data.stations) {
-        // 按 id（或数组下标）匹配对应模型
-        var model = self.findModelById(station.id);
-        if (!model) return;  // 未找到对应模型则跳过
+      for (const station of data.stations) {
+        // 按 id 匹配对应模型
+        const model = self.findModelById(station.id);
+        if (!model) {
+          console.warn("data_handler: 未找到模型 id=", station.id);
+          continue;  // 跳过当前 station，继续处理下一个
+        }
 
         // --- 状态 → 颜色 ---
         if (station.status) {
@@ -78,7 +81,7 @@ export class DataHandler {
         if (station.temp !== undefined) {
           self.applyTemperature(model, station.temp);
         }
-      };
+      }
     }
 
     return data;
@@ -86,14 +89,17 @@ export class DataHandler {
 
   // ======================== 具体驱动函数 ========================
 
-  /** 按设备 id 查找 Three.js 模型对象 */
+  /** 按设备 id 查找 Three.js 模型对象（匹配 userData.id） */
   findModelById(id) {
-    return this.objects[id] || null;
+    for (const m of this.allModelInstances) {
+      if (m.userData.id === id) return m;
+    }
+    return null;
   }
 
   /** 根据运行状态修改模型颜色 */
   applyStatus(model, status) {
-    var color = STATUS_COLORS[status] || 0x888888;
+    const color = STATUS_COLORS[status] || 0x888888;
     model.traverse(function(ch) {
       if (ch.isMesh && ch.material && !ch.material.isLineBasicMaterial) {
         ch.material.color.setHex(color);
@@ -118,10 +124,10 @@ export class DataHandler {
 
   /** 温度映射为颜色渐变：低温蓝 → 中温绿 → 高温红 */
   applyTemperature(model, temp) {
-    var t = Math.min(Math.max((temp - 20) / 80, 0), 1);  // 20~100°C 映射到 0~1
-    var r = Math.min(t * 2, 1);
-    var g = Math.min((1 - t) * 2, 1);
-    var b = Math.max(1 - t * 2, 0);
+    const t = Math.min(Math.max((temp - 20) / 80, 0), 1);  // 20~100°C 映射到 0~1
+    const r = Math.min(t * 2, 1);
+    const g = Math.min((1 - t) * 2, 1);
+    const b = Math.max(1 - t * 2, 0);
     model.traverse(function(ch) {
       if (ch.isMesh && ch.material && !ch.material.isLineBasicMaterial) {
         ch.material.color.setRGB(r, g, b);

@@ -43,10 +43,12 @@ export function initImporter(ctx) {
   }
 
   // ======================== 变换状态持久化（localStorage）=======================
-  /** 保存所有模型的位置/旋转/缩放到 localStorage */
+  /** 保存所有模型的位置/旋转/缩放到 localStorage（按 userData.id 存储） */
   function savePositions() {
-    const data = allModelInstances.map(function(m) {
-      return {
+    const data = {};
+    allModelInstances.forEach(function(m) {
+      const id = m.userData.id || "unknown";
+      data[id] = {
         pos: { x: m.position.x, y: m.position.y, z: m.position.z },
         rot: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
         scl: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
@@ -55,26 +57,33 @@ export function initImporter(ctx) {
     localStorage.setItem("dt_model_transforms", JSON.stringify(data));
   }
 
-  /** 从 localStorage 恢复变换状态，兼容旧版 dt_model_positions 格式 */
+  /** 从 localStorage 恢复变换状态（按 userData.id 匹配，兼容旧版数组格式） */
   function loadPositions() {
-    const raw = localStorage.getItem("dt_model_transforms") || localStorage.getItem("dt_model_positions");
+    const raw = localStorage.getItem("dt_model_transforms");
     if (!raw) return;
     try {
       const data = JSON.parse(raw);
-      // 条目数与模型数不匹配 → 暂不恢复，保留旧数据等下次匹配
-      if (data.length !== allModelInstances.length) {
-        console.warn("loadPositions: model count mismatch (expected", allModelInstances.length, "got", data.length, "), skipping");
-        return;
-      }
-      allModelInstances.forEach(function(m, i) {
-        if (i < data.length) {
-          if (data[i].pos) {
+      // 兼容旧版数组格式
+      if (Array.isArray(data)) {
+        console.warn("loadPositions: 检测到旧版数组格式，按数组下标恢复");
+        allModelInstances.forEach(function(m, i) {
+          if (i < data.length && data[i].pos) {
             m.position.set(data[i].pos.x, data[i].pos.y, data[i].pos.z);
             if (data[i].rot) m.rotation.set(data[i].rot.x, data[i].rot.y, data[i].rot.z);
             if (data[i].scl) m.scale.set(data[i].scl.x, data[i].scl.y, data[i].scl.z);
-          } else {
-            m.position.set(data[i].x, data[i].y, data[i].z);
           }
+        });
+        return;
+      }
+      // 新版对象格式：按 userData.id 匹配
+      allModelInstances.forEach(function(m) {
+        const id = m.userData.id || "unknown";
+        const entry = data[id];
+        if (!entry) return;
+        if (entry.pos) {
+          m.position.set(entry.pos.x, entry.pos.y, entry.pos.z);
+          if (entry.rot) m.rotation.set(entry.rot.x, entry.rot.y, entry.rot.z);
+          if (entry.scl) m.scale.set(entry.scl.x, entry.scl.y, entry.scl.z);
         }
       });
     } catch(e) { console.warn("loadPositions error:", e); }

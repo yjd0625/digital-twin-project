@@ -4,7 +4,7 @@ import logging
 
 import websockets
 
-from .config import WS_HOST, WS_PORT, PLANT_BUFFER_SIZE, DATA_ENCODING, LOG_LEVEL
+from .config import WS_HOST, WS_PORT, PLANT_BUFFER_SIZE, DATA_ENCODING, LOG_LEVEL, LOG_FILE
 from .plant_connector import PlantConnector
 from .websocket_handler import WebSocketHandler
 from .data_processor import DataProcessor
@@ -14,10 +14,16 @@ logger = logging.getLogger(__name__)
 
 async def main():
     # 日志配置
+    import os
+    log_dir = os.path.dirname(LOG_FILE)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
     logging.basicConfig(
         level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+        filename=LOG_FILE,
+        filemode="a",
     )
 
     # 初始化各模块
@@ -48,8 +54,9 @@ async def main():
                 parsed = processor.parse(text)
                 await handler.broadcast(parsed)
             except Exception as exc:
-                logger.error("Loop error: %s", exc)
-                break
+                logger.error("Loop error: %s", exc, exc_info=True)
+                await asyncio.sleep(1)
+                continue  # 继续运行，不退出主循环
     finally:
         plant.close()
         ws_server.close()

@@ -23,6 +23,7 @@ export function createScene(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(w, h);
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 柔和阴影
   container.appendChild(renderer.domElement);
 
   // --- CSS2D 渲染器（浮动标签） ---
@@ -45,6 +46,16 @@ export function createScene(container) {
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);  // 主光源
   dirLight.position.set(2, 5, 3);
   dirLight.castShadow = true;
+  // 阴影相机配置（覆盖场景范围）
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 50;
+  dirLight.shadow.camera.left = -20;
+  dirLight.shadow.camera.right = 20;
+  dirLight.shadow.camera.top = 20;
+  dirLight.shadow.camera.bottom = -20;
+  dirLight.shadow.bias = -0.001;  // 减少阴影瑕疵
   scene.add(dirLight);
 
   const backLight = new THREE.DirectionalLight(0x4466ff, 0.5);  // 背光补光

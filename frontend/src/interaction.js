@@ -32,7 +32,7 @@ export function initInteraction(ctx, importer) {
     if (multi) {
       if (selectedObjects.indexOf(obj) >= 0) {
         if (selectionBoxes[obj.id]) { scene.remove(selectionBoxes[obj.id]); delete selectionBoxes[obj.id]; }
-        var i = selectedObjects.indexOf(obj);
+        let i = selectedObjects.indexOf(obj);
         if (i >= 0) selectedObjects.splice(i, 1);
         return;
       }
@@ -41,20 +41,20 @@ export function initInteraction(ctx, importer) {
       deselectAll();
       selectedObjects.push(obj);
     }
-    var bx = new THREE.BoxHelper(obj, 0x00ff00);
+    let bx = new THREE.BoxHelper(obj, 0x00ff00);
     bx.update();
     scene.add(bx);
     selectionBoxes[obj.id] = bx;
   }
 
   function deselectAll() {
-    for (var k in selectionBoxes) { scene.remove(selectionBoxes[k]); }
-    for (var k in selectionBoxes) delete selectionBoxes[k];
+    for (let k in selectionBoxes) { scene.remove(selectionBoxes[k]); }
+    for (let k in selectionBoxes) delete selectionBoxes[k];
     selectedObjects.length = 0;
   }
 
   function updateSelectionBoxes() {
-    for (var k in selectionBoxes) selectionBoxes[k].update();
+    for (let k in selectionBoxes) selectionBoxes[k].update();
   }
 
   // ======================== 点击检测（选中/取消选中）=======================
@@ -64,17 +64,17 @@ export function initInteraction(ctx, importer) {
   });
 
   renderer.domElement.addEventListener("pointerup", function _pu1(e) {
-    var dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
+    let dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
     if (Math.sqrt(dx * dx + dy * dy) > 5) return; // 是拖拽，不是点击
     if (!allModelInstances.length) return;
 
-    var rect = renderer.domElement.getBoundingClientRect();
+    let rect = renderer.domElement.getBoundingClientRect();
     _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     _raycaster.setFromCamera(_mouse, camera);
 
-    var hit = false;
-    for (var i = 0; i < allModelInstances.length; i++) {
+    let hit = false;
+    for (let i = 0; i < allModelInstances.length; i++) {
       if (_raycaster.intersectObject(allModelInstances[i], true).length > 0) {
         selectObject(allModelInstances[i], _ctrlDown);
         hit = true; break;
@@ -85,7 +85,7 @@ export function initInteraction(ctx, importer) {
 
   // ======================== 键盘快捷键 ========================
   // 按键 → 动作映射表（比 switch 更简洁）
-  var KEY_ACTIONS = {};
+  const KEY_ACTIONS = {};
   KEY_ACTIONS["ArrowUp"]    = function(o) { o.position.x += MOVE_STEP; };
   KEY_ACTIONS["ArrowDown"]  = function(o) { o.position.x -= MOVE_STEP; };
   KEY_ACTIONS["ArrowLeft"]  = function(o) { o.position.z -= MOVE_STEP; };
@@ -96,8 +96,8 @@ export function initInteraction(ctx, importer) {
   KEY_ACTIONS["d"] = KEY_ACTIONS["D"] = function(o) { o.rotation.x += ROT_STEP; };
   KEY_ACTIONS["z"] = KEY_ACTIONS["Z"] = function(o) { o.rotation.z -= ROT_STEP; };
   KEY_ACTIONS["c"] = KEY_ACTIONS["C"] = function(o) { o.rotation.z += ROT_STEP; };
-  KEY_ACTIONS["["] = function(o) { var s = o.scale.x * 0.9; o.scale.set(s, s, s); };
-  KEY_ACTIONS["]"] = function(o) { var s = o.scale.x * 1.1; o.scale.set(s, s, s); };
+  KEY_ACTIONS["["] = function(o) { let s = o.scale.x * 0.9; o.scale.set(s, s, s); };
+  KEY_ACTIONS["]"] = function(o) { let s = o.scale.x * 1.1; o.scale.set(s, s, s); };
 
   document.addEventListener("keydown", function _kd(e) {
     if (e.key === "Control") { _ctrlDown = true; return; }
@@ -105,21 +105,22 @@ export function initInteraction(ctx, importer) {
 
     // Delete：删除选中对象
     if (e.key === "Delete" && selectedObjects.length) {
-      for (var i = selectedObjects.length - 1; i >= 0; i--) {
-        var obj = selectedObjects[i];
+      for (let i = selectedObjects.length - 1; i >= 0; i--) {
+        const obj = selectedObjects[i];
+        // 清理 CSS2DObject 的 DOM 元素
         obj.traverse(function(ch) { if (ch.isCSS2DObject && ch.element) ch.element.remove(); });
-        var idx = allModelInstances.indexOf(obj);
+        // 从 allModelInstances 中移除
+        const idx = allModelInstances.indexOf(obj);
         if (idx >= 0) allModelInstances.splice(idx, 1);
+        // 从场景中移除
         scene.remove(obj);
-        if (dataHandler.objects.cube === obj)
-          dataHandler.objects.cube = allModelInstances.length > 0 ? allModelInstances[0] : null;
       }
       deselectAll();
       return;
     }
 
     if (!selectedObjects.length) return;
-    var action = KEY_ACTIONS[e.key];
+    let action = KEY_ACTIONS[e.key];
     if (action) {
       selectedObjects.forEach(action);
       updateSelectionBoxes();
@@ -132,11 +133,11 @@ export function initInteraction(ctx, importer) {
     if (e.shiftKey) {
       if (!selectedObjects.length) {
         // 自动选中光标下的模型
-        var r = renderer.domElement.getBoundingClientRect();
+        const r = renderer.domElement.getBoundingClientRect();
         _mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
         _mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         _raycaster.setFromCamera(_mouse, camera);
-        for (var mi = 0; mi < allModelInstances.length; mi++) {
+        for (let mi = 0; mi < allModelInstances.length; mi++) {
           if (_raycaster.intersectObject(allModelInstances[mi], true).length > 0) {
             selectObject(allModelInstances[mi], _ctrlDown);
             break;
@@ -153,14 +154,14 @@ export function initInteraction(ctx, importer) {
 
   renderer.domElement.addEventListener("pointermove", function _pm(e) {
     if (!isDragging || !selectedObjects.length) return;
-    var rect = renderer.domElement.getBoundingClientRect();
+    let rect = renderer.domElement.getBoundingClientRect();
     _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     _raycaster.setFromCamera(_mouse, camera);
-    var pt = _raycaster.ray.intersectPlane(_dragPlane, new THREE.Vector3());
+    let pt = _raycaster.ray.intersectPlane(_dragPlane, new THREE.Vector3());
     if (pt) {
-      var dx = pt.x - selectedObjects[0].position.x;
-      var dz = pt.z - selectedObjects[0].position.z;
+      let dx = pt.x - selectedObjects[0].position.x;
+      let dz = pt.z - selectedObjects[0].position.z;
       selectedObjects.forEach(function(o) { o.position.x += dx; o.position.z += dz; });
       updateSelectionBoxes();
       importer.savePositions();
