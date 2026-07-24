@@ -33,6 +33,8 @@ export function setupUI(controls, sendCommand, extra) {
   document.getElementById("btn-default")?.addEventListener("click", () => extra?.onView?.("default"));
   // 复位按钮
   document.getElementById("btn-reset")?.addEventListener("click", () => extra?.onReset?.());
+  // 标签显隐切换
+  document.getElementById("btn-labels")?.addEventListener("click", () => extra?.onToggleLabels?.());
 
   return { updateInfo };
 }
