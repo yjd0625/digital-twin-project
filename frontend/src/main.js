@@ -174,6 +174,7 @@ renderer.domElement.addEventListener("pointerup", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Control") { _ctrlDown = true; return; }
+    if (e.shiftKey) return;
   if (e.key === "Delete" && selectedObjects.length) {
     for (var i = selectedObjects.length - 1; i >= 0; i--) {
       var obj = selectedObjects[i];
