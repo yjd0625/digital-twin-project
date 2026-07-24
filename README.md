@@ -29,7 +29,10 @@
 
 ## 快速开始
 
-### 1. 后端
+### 1. PlantSimulation
+打开 simulation/models/main_model.spp，运行仿真并启动Socket服务器。
+
+### 2. 后端
 
 ```bash
 cd backend
@@ -37,16 +40,13 @@ pip install -r requirements.txt
 python -m src.main
 ```
 
-### 2. 前端
+### 3. 前端
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-### 3. PlantSimulation
-打开 simulation/models/main_model.spp，运行仿真。
 
 ### 4. 访问
 浏览器打开 http://localhost:5173
