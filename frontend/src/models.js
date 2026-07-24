@@ -65,7 +65,11 @@ export async function loadGLTFModel(scene, url, options = {}) {
   const scale = options.scale ?? 1;
   if (scale !== 1) model.scale.set(scale, scale, scale);
 
-  // 计算边界框（缩放后）并居中
+  // 修正朝向：某些 CAD 导出的模型是 Z-up，需要旋转到 Y-up
+  if (options.rotateX) model.rotation.x = options.rotateX;
+  model.updateMatrixWorld(true);
+
+  // 计算边界框（缩放+旋转后）并居中
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
