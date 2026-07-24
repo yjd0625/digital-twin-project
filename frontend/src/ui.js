@@ -31,13 +31,5 @@ export function setupUI(controls, sendCommand, extra) {
   document.getElementById("btn-front")?.addEventListener("click", () => extra?.onView?.("front"));
   document.getElementById("btn-side")?.addEventListener("click", () => extra?.onView?.("side"));
   document.getElementById("btn-default")?.addEventListener("click", () => extra?.onView?.("default"));
-  // import
-  document.getElementById("btn-import")?.addEventListener("click", () => {
-    document.getElementById("file-input")?.click();
-  });
-  document.getElementById("file-input")?.addEventListener("change", (e) => {
-    if (e.target.files.length) extra?.onImport?.(e.target.files[0]);
-  });
-
   return { updateInfo };
 }

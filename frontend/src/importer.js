@@ -1,39 +1,9 @@
-import * as THREE from "three";
-import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
-
 /**
- * 导入与持久化模块 — 模型导入（DXF/GLTF）、视角切换、位置持久化（localStorage + IndexedDB）
+ * 持久化模块 — 视角切换、位置/旋转/缩放变换持久化（localStorage）
  */
 
-export function initImporter(ctx, sel) {
-  const { scene, camera, controls, allModelInstances, dataHandler, labelRenderer } = ctx;
-
-  // ======================== IndexedDB（导入文件持久化）===============
-  // 通用 IDB 操作：mode = "rw"|"ro", op = "put"|"getAll"|"delete", data = 可选
-  function idb(mode, op, data) {
-    return new Promise(function(resolve, reject) {
-      var r = indexedDB.open("DT_ModelStore", 1);
-      r.onupgradeneeded = function() { r.result.createObjectStore("models", { keyPath: "id" }); };
-      r.onsuccess = function() {
-        var db = r.result;
-        var tx = db.transaction("models", mode === "rw" ? "readwrite" : "readonly");
-        var store = tx.objectStore("models");
-        var req;
-        if (op === "put") req = store.put(data);
-        else if (op === "getAll") req = store.getAll();
-        else if (op === "delete") req = store.delete(data);
-        if (req) {
-          req.onsuccess = function() { tx.oncomplete = function() { resolve(req.result); db.close(); }; };
-          req.onerror = function() { reject(req.error); };
-        } else {
-          tx.oncomplete = function() { resolve(); db.close(); };
-        }
-      };
-      r.onerror = function() { reject(r.error); };
-    });
-  }
-
-  function deleteModel(id) { return idb("rw", "delete", id); }
+export function initImporter(ctx) {
+  const { scene, camera, controls, allModelInstances } = ctx;
 
   // ======================== 视角切换 ========================
   var VIEW_PRESETS = {
@@ -45,6 +15,7 @@ export function initImporter(ctx, sel) {
   var _targetCamPos = null;
   var _targetCtrlTarget = new THREE.Vector3(0, 0, 0);
 
+  /** 切换到预设视角 */
   function setView(name) {
     var cfg = VIEW_PRESETS[name]; if (!cfg) return;
     if (name === "default") {
@@ -58,7 +29,7 @@ export function initImporter(ctx, sel) {
     _targetCtrlTarget.set(cfg.target[0], cfg.target[1], cfg.target[2]);
   }
 
-  /** 在动画循环中被调用，平滑过渡到目标视角 */
+  /** 在动画循环中调用，平滑过渡到目标视角 */
   function updateViewTransition() {
     if (_targetCamPos) {
       camera.position.lerp(_targetCamPos, 0.12);
@@ -72,125 +43,8 @@ export function initImporter(ctx, sel) {
     _targetCamPos = null;
   }
 
-  // ======================== 导入模型文件 ========================
-  /** 将 DXF 解析为单个 LineSegments + 透明点击平面 */
-  function dxfToLineGroup(drawing) {
-    if (!drawing.entities || !drawing.entities.length) return null;
-    var verts = [];
-    var mx = -Infinity, nx = Infinity, my = -Infinity, ny = Infinity;
-    function addSeg(x1, y1, x2, y2) {
-      verts.push(x1, y1, 0, x2, y2, 0);
-      if (x1 > mx) mx = x1; if (x1 < nx) nx = x1;
-      if (x2 > mx) mx = x2; if (x2 < nx) nx = x2;
-      if (y1 > my) my = y1; if (y1 < ny) ny = y1;
-      if (y2 > my) my = y2; if (y2 < ny) ny = y2;
-    }
-    drawing.entities.forEach(function(ent) {
-      try {
-        if (ent.type === "LINE" && ent.vertices && ent.vertices.length >= 2) {
-          addSeg(ent.vertices[0].x, ent.vertices[0].y, ent.vertices[1].x, ent.vertices[1].y);
-        } else if ((ent.type === "LWPOLYLINE" || ent.type === "POLYLINE") && ent.vertices && ent.vertices.length >= 2) {
-          for (var vi = 1; vi < ent.vertices.length; vi++) addSeg(ent.vertices[vi-1].x, ent.vertices[vi-1].y, ent.vertices[vi].x, ent.vertices[vi].y);
-          if (ent.closed) { var v = ent.vertices; addSeg(v[v.length-1].x, v[v.length-1].y, v[0].x, v[0].y); }
-        } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
-          for (var a = 0; a < 64; a++) { var a1 = (a/64)*Math.PI*2, a2 = ((a+1)/64)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
-        } else if (ent.type === "ARC" && ent.center && ent.radius) {
-          var sa = (ent.startAngle||0)*Math.PI/180, ea = (ent.endAngle||360)*Math.PI/180;
-          for (var i = 0; i < 32; i++) { var a1 = sa+(ea-sa)*(i/32), a2 = sa+(ea-sa)*((i+1)/32); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
-        }
-      } catch(e2) {}
-    });
-    if (!verts.length) return null;
-    var group = new THREE.Group();
-    var geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-    group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00aaff })));
-    // 透明点击面
-    var pw = Math.max(mx - nx || 1, 1), ph = Math.max(my - ny || 1, 1);
-    var pgeo = new THREE.PlaneGeometry(pw * 1.2, ph * 1.2);
-    var pmat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.02, side: THREE.DoubleSide, depthWrite: false });
-    var clickPlane = new THREE.Mesh(pgeo, pmat);
-    clickPlane.position.set((mx + nx) / 2, (my + ny) / 2, 0);
-    group.add(clickPlane);
-    return group;
-  }
-
-  /** 给模型添加 CSS2D 标签并加入场景 */
-  function addToScene(obj, sizeY, label) {
-    if (window._nextModelId) { obj.userData.modelId = window._nextModelId; window._nextModelId = null; }
-    if (label) {
-      var div = document.createElement("div");
-      div.textContent = label;
-      div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-      var lbl = new CSS2DObject(div);
-      lbl.position.set(0, sizeY / 2 + 0.5, 0);
-      obj.add(lbl);
-    }
-    scene.add(obj);
-    allModelInstances.push(obj);
-    if (sel.selectObject) sel.selectObject(obj);
-  }
-
-  /** 居中 + 地面对齐 + 自适应缩放 */
-  function autoSize(obj) {
-    var box = new THREE.Box3().setFromObject(obj);
-    var center = box.getCenter(new THREE.Vector3());
-    var size = box.getSize(new THREE.Vector3());
-    var maxDim = Math.max(size.x, size.y, size.z);
-    var sc = maxDim > 0 ? 3 / maxDim : 1;
-    obj.scale.set(sc, sc, sc);
-    obj.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
-    return size.y * sc;
-  }
-
-  function importModelFile(file) {
-    var name = file.name;
-    var ext = name.split(".").pop().toLowerCase();
-    var label = name.replace(/\.[^.]+$/, "");
-
-    // DXF / DWG 图纸
-    if (ext === "dxf" || ext === "dwg") {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var _buf = e.target.result;
-        var _txt = new TextDecoder("utf-8").decode(_buf);
-        window._nextModelId = "imp_" + Date.now() + "_" + Math.random().toString(36).substr(2,5);
-        idb("rw", "put", { id: window._nextModelId, name: name, type: ext, data: _buf });
-        import("dxf-parser").then(function(mod) {
-          try {
-            var drawing = new mod.default().parseSync(_txt);
-            var group = dxfToLineGroup(drawing);
-            if (!group) { console.warn("DXF has no entities"); return; }
-            group.rotation.x = -Math.PI / 2;
-            var sizeY = autoSize(group);
-            addToScene(group, sizeY, label);
-          } catch(e3) { console.error("DXF error:", e3); }
-        });
-      };
-      reader.readAsArrayBuffer(file);
-      return;
-    }
-
-    // GLTF / GLB 模型
-    var reader = new FileReader();
-    reader.onload = async function() {
-      var _buf = e.target.result;
-      var _blob = new Blob([_buf]);
-      window._nextModelId = "imp_" + Date.now() + "_" + Math.random().toString(36).substr(2,5);
-      idb("rw", "put", { id: window._nextModelId, name: name, type: ext, data: _buf });
-      try {
-        var { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-        var gltf = await (new GLTFLoader()).loadAsync(URL.createObjectURL(_blob));
-        var mdl = gltf.scene;
-        mdl.traverse(function(ch) { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
-        var sizeY = autoSize(mdl);
-        addToScene(mdl, sizeY, label);
-      } catch(e) { console.error("Import error:", e); }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  // ======================== 持久化（变换状态）=======================
+  // ======================== 变换状态持久化（localStorage）=======================
+  /** 保存所有模型的位置/旋转/缩放到 localStorage */
   function savePositions() {
     var data = allModelInstances.map(function(m) {
       return {
@@ -202,6 +56,7 @@ export function initImporter(ctx, sel) {
     localStorage.setItem("dt_model_transforms", JSON.stringify(data));
   }
 
+  /** 从 localStorage 恢复，兼容旧版 dt_model_positions 格式 */
   function loadPositions() {
     var raw = localStorage.getItem("dt_model_transforms") || localStorage.getItem("dt_model_positions");
     if (!raw) return;
@@ -221,56 +76,5 @@ export function initImporter(ctx, sel) {
     } catch(e) { console.warn(e); }
   }
 
-  // ======================== 从 IndexedDB 恢复已导入的模型 ========================
-  async function loadStoredModels() {
-    var entries = await idb("rw", "getAll");
-    for (var entry of entries) {
-      if (!entry.data) continue;
-      try {
-        var blob = new Blob([entry.data]);
-        var url = URL.createObjectURL(blob);
-        if (entry.type === "dxf" || entry.type === "dwg") {
-          var text = await new Response(blob).text();
-          var mod = await import("dxf-parser");
-          var drawing = new mod.default().parseSync(text);
-          var group = dxfToLineGroup(drawing);
-          if (!group) continue;
-          group.userData.modelId = entry.id;
-          group.rotation.x = -Math.PI / 2;
-          autoSize(group);
-          if (sel.deselectAll) { /* just add to scene */ }
-          var div = document.createElement("div"); div.textContent = entry.name || "restored DXF";
-          div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-          group.add(new CSS2DObject(div));
-          scene.add(group); allModelInstances.push(group);
-        } else {
-          var { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-          var gltf = await (new GLTFLoader()).loadAsync(url);
-          var mdl = gltf.scene;
-          mdl.userData.modelId = entry.id;
-          mdl.traverse(function(ch) { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
-          if (entry.transform) {
-            var t = entry.transform;
-            mdl.position.set(t.pos.x||0, t.pos.y||0, t.pos.z||0);
-            mdl.rotation.set(t.rot.x||0, t.rot.y||0, t.rot.z||0);
-            mdl.scale.set(t.scl.x||1, t.scl.y||1, t.scl.z||1);
-          } else {
-            autoSize(mdl);
-          }
-          var div2 = document.createElement("div"); div2.textContent = entry.name || "restored model";
-          div2.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-          mdl.add(new CSS2DObject(div2));
-          scene.add(mdl); allModelInstances.push(mdl);
-        }
-      } catch(e) { console.warn("Restore failed:", entry.name, e); }
-      URL.revokeObjectURL(url);
-    }
-    loadPositions();
-  }
-
-  // ======================== 返回公共接口 ========================
-  return {
-    setView, updateViewTransition, cancelViewTransition,
-    importModelFile, savePositions, loadPositions, loadStoredModels, deleteModel,
-  };
+  return { setView, updateViewTransition, cancelViewTransition, savePositions, loadPositions };
 }
