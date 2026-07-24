@@ -54,9 +54,9 @@ const allModelInstances = [];
 async function loadAllModels() {
   // --- GLTF/GLB 设备模型 ---
   const configs = [
-    { url: "/models/assembleStation.glb", label: "\u7ec4\u88c5\u5de5\u4f4d", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
-    { url: "/models/telescopicFork.glb", label: "\u4f38\u7f29\u53c9", count: 1, positions: [[-4,0,0]] },
-    { url: "/models/weldHangingRobot.glb", label: "\u710a\u63a5\u673a\u5668\u4eba", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
+    { url: "/models/assembleStation.glb", label: "组装工位", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
+    { url: "/models/telescopicFork.glb", label: "伸缩臂", count: 1, positions: [[-4,0,0]] },
+    { url: "/models/weldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
   ];
   for (const cfg of configs) {
     for (let i = 0; i < cfg.count; i++) {
@@ -68,7 +68,7 @@ async function loadAllModels() {
 
   // --- DXF 产线布局图 ---
   try {
-    const layout = await loadDXFModel(scene, "/models/layout.dxf", { label: "\u4ea7\u7ebf\u5e03\u5c40\u56fe", position: [0, 0, 0] });
+    const layout = await loadDXFModel(scene, "/models/layout.dxf", { label: "产线布局图", position: [0, 0, 0] });
     if (layout) allModelInstances.push(layout);
   } catch(e) { console.warn("DXF layout load failed:", e); }
   return allModelInstances;
@@ -83,7 +83,7 @@ function applyDataToModels(data) {
     m.rotation.x = val; m.rotation.y = val * 0.5;
     m.traverse(function(ch) { if (ch.isMesh && ch.material) ch.material.color.setHSL(hue, 0.8, 0.5); });
   });
-  ui.updateInfo("\u6700\u65b0\u6570\u636e: " + raw);
+  ui.updateInfo("最新数据: " + raw);
 }
 
 // ======================== 初始化各模块 ========================
@@ -103,6 +103,7 @@ loadAllModels()
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.copy(center);
     controls.update();
+    importer.saveDefaultTransforms();  // 保存当前位置为默认值（复位用）
     importer.loadPositions();  // 恢复之前保存的变换状态
     console.log("All models loaded:", instances.length);
   })
@@ -112,7 +113,7 @@ loadAllModels()
 let ws;
 function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
-  ws.onopen = function() { ui.updateInfo("\u2713 \u5df2\u8fde\u63a5\u5230\u6570\u636e\u6e90", "rgba(0,200,0,0.7)"); };
+  ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
     try { var data = JSON.parse(event.data); applyDataToModels(data); }
     catch(e) { console.error(e); }
@@ -131,6 +132,8 @@ function sendCommand(msg) {
 // ======================== UI 绑定 ========================
 const ui = setupUI(controls, sendCommand, { onView: importer.setView });
 connectWebSocket();
+
+document.getElementById("btn-reset")?.addEventListener("click", function() { importer.resetPositions(); });
 
 // ======================== 窗口尺寸自适应 ========================
 window.addEventListener("resize", function() {
