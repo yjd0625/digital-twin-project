@@ -61,18 +61,15 @@ export async function loadGLTFModel(scene, url, options = {}) {
   const gltf = await loader.loadAsync(url);
   const model = gltf.scene;
 
-  // 自动居中
+  // 自动居中（不缩放，保留原始尺寸）
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
 
-  // 默认缩放到 2 单位大小，或使用用户指定的 scale
-  const targetScale = options.scale ?? (maxDim > 0 ? 2 / maxDim : 1);
-  model.scale.set(targetScale, targetScale, targetScale);
+  const scale = options.scale ?? 1;
+  if (scale !== 1) model.scale.set(scale, scale, scale);
 
   const pos = options.position ?? [0, 0, 0];
-  model.position.set(pos[0] - center.x * targetScale, pos[1] - center.y * targetScale, pos[2] - center.z * targetScale);
+  model.position.set(pos[0] - center.x * scale, pos[1] - center.y * scale, pos[2] - center.z * scale);
 
   // 启用阴影
   model.traverse((child) => {
