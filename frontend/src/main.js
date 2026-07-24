@@ -197,9 +197,23 @@ document.addEventListener("keydown", (e) => {
   if (moved) { updateSelectionBoxes(); savePositions(); }
 });
 renderer.domElement.addEventListener("pointerdown", (e) => {
-  if (e.shiftKey && selectedObjects.length) {
-    isDragging = true;
-    controls.enabled = false;
+  if (e.shiftKey) {
+    if (!selectedObjects.length) {
+      var r = renderer.domElement.getBoundingClientRect();
+      _mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      _mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+      _raycaster.setFromCamera(_mouse, camera);
+      for (var mi = 0; mi < allModelInstances.length; mi++) {
+        if (_raycaster.intersectObject(allModelInstances[mi], true).length > 0) {
+          selectObject(allModelInstances[mi], _ctrlDown);
+          break;
+        }
+      }
+    }
+    if (selectedObjects.length) {
+      isDragging = true;
+      controls.enabled = false;
+    }
   }
 });
 renderer.domElement.addEventListener("pointermove", (e) => {
