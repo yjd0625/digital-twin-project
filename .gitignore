@@ -39,3 +39,5 @@ frontend/dist/
 # Simulation backup
 simulation/models/backup/
 frontend/src/.history/
+
+.history/
