@@ -6,9 +6,7 @@
 
 ## 仿真说明
 
-本仓库**不包含** PlantSimulation 模型文件（\.spp\），原因：
-
-- PlantSimulation 是 Siemens 的商业闭源软件，其模型文件（\.spp\）属于用户的专有资产
+本仓库**不包含** PlantSimulation 模型文件（\.spp\）：
 - 本仓库仅开源 Python 后端和前端可视化代码
 
 如需运行完整系统，请在 PlantSimulation 中：

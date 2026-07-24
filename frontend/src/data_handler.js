@@ -34,8 +34,8 @@ var STATUS_COLORS = {
  */
 export class DataHandler {
   constructor(ctx = {}) {
-    // 将传入的对象直接赋值给 this.objects（或 this.models）
-    this.objects = ctx.objects || {};      // 后续用 dataHandler.objects.cube
+    // 将传入的对象直接赋值给 this.objects
+    this.objects = ctx.objects || {};      // 后续用 dataHandler.objects
     this.updateInfo = ctx.updateInfo || (() => {}); // 占位函数
     this.latestData = null;
   }
@@ -54,7 +54,7 @@ export class DataHandler {
     // 【第二步】逐个设备驱动
     if (data.stations && Array.isArray(data.stations)) {
       var self = this;
-      data.stations.forEach(function(station) {
+      for (var station of data.stations) {
         // 按 id（或数组下标）匹配对应模型
         var model = self.findModelById(station.id);
         if (!model) return;  // 未找到对应模型则跳过
@@ -78,7 +78,7 @@ export class DataHandler {
         if (station.temp !== undefined) {
           self.applyTemperature(model, station.temp);
         }
-      });
+      };
     }
 
     return data;
@@ -88,7 +88,7 @@ export class DataHandler {
 
   /** 按设备 id 查找 Three.js 模型对象 */
   findModelById(id) {
-    return this.models.find(function(m) { return m.userData.id === id; });
+    return this.objects[id] || null;
   }
 
   /** 根据运行状态修改模型颜色 */
