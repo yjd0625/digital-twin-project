@@ -165,7 +165,7 @@
   <li><a href="#fe-html">index.html — 页面结构</a></li>
   <li><a href="#fe-config">vite.config.js / package.json</a></li>
   <li><a href="#backend">后端模块</a></li>
-  <li><a href="#scripts">工具脚本</a></li>
+  <li><a href="#run">启动方式</a></li>
   <li><a href="#sim">PlantSimulation 仿真脚本</a></li>
 </ul>
 </div>
@@ -203,10 +203,6 @@ digital-twin-project/<br>
 ├── <span class="hl">simulation/</span>        <span class="cmt"># PlantSimulation 仿真文件</span><br>
 │   ├── <span class="fd">models/</span>               <span class="cmt">── .spp 仿真模型</span><br>
 │   └── <span class="fd">scripts/</span>              <span class="cmt">── SimTalk 脚本示例（数据发送/接收）</span><br>
-├── <span class="hl">scripts/</span>           <span class="cmt"># 启动脚本</span><br>
-│   ├── <span class="fp">start_frontend.bat</span>    <span class="cmt">── 一键启动前端（http://localhost:5173）</span><br>
-│   └── <span class="fp">start_backend.bat</span>     <span class="cmt">── 一键启动后端（ws://localhost:8300/ws）</span><br>
-│
 └── <span class="fd">docs/</span>                <span class="cmt">── 文档（你正在看的这个文件）</span>
 </div>
 </section>
@@ -674,53 +670,64 @@ bus.subscribe("plant/command") → plant_connector.send() → PlantSimulation
 </details>
 </div>
 
+<div class="api" style="margin-top:24px;">
+<h3 style="margin:0 0 12px;">启动顺序与端口总览</h3>
+<p style="color:var(--muted);margin:0 0 14px;">本系统共 <b>5 个</b>需手动启动的组件，外加 <b>Docker Desktop</b> 作为容器运行前提。请按以下顺序启动：</p>
+<table style="width:100%;border-collapse:collapse;font-size:13px;">
+<thead>
+<tr style="background:var(--surface2);text-align:left;">
+<th style="padding:8px 12px;">顺序</th><th style="padding:8px 12px;">组件</th><th style="padding:8px 12px;">启动方式</th><th style="padding:8px 12px;">占用端口</th>
+</tr>
+</thead>
+<tbody>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">前置</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>Docker Desktop</b></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">桌面应用（建议开机自启）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">—</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">1</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>Redis</b>（消息总线）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>redis-twin</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>6379</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">2</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB 3 Core</b>（时序库）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>influxdb3-core</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>18080</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">3</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>InfluxDB3 Explorer</b>（Web 界面）</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Docker 容器 <code>influxdb3-explorer</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8888</code></td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">4</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><b>后端</b> (FastAPI)</td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);">Python 进程 <code>python -m src.main</code></td><td style="padding:8px 12px;border-bottom:1px solid var(--surface2);"><code>8300</code></td></tr>
+<tr><td style="padding:8px 12px;">5</td><td style="padding:8px 12px;">前端 (Vite)</td><td style="padding:8px 12px;"><code>npm run dev</code></td><td style="padding:8px 12px;"><code>5173</code></td></tr>
+</tbody>
+</table>
+<p style="color:var(--muted);margin:12px 0 0;">本机端口占用一览：<code>6379</code>(Redis) · <code>18080</code>(InfluxDB) · <code>8888</code>(Explorer) · <code>8300</code>(后端) · <code>5173</code>(前端) · <code>30000</code>(PlantSimulation Socket)。若某端口被占用，启动前需释放或改用其他端口。</p>
+</div>
+
 <div class="api" style="margin-top:20px;">
 <details>
-<summary>🐳 Redis 部署（Docker，替代旧 Windows 版）</summary>
+<summary>🐳 Docker 基础设施（Redis + InfluxDB + Explorer）</summary>
 <pre style="background:var(--code);padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">
-# 旧 Windows Redis 服务(3.0.504)已停用，端口 6379 让给 Docker 容器
-# 创建并后台运行；--restart unless-stopped 保证重启电脑后自动拉起
+# 0. 先确保 Docker Desktop 已启动（托盘图标 running），否则容器无法运行
+
+# 1. Redis（消息总线，端口 6379）
 docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
 
+# 2. InfluxDB 3 Core（时序库，端口 18080）
+docker run -d --name influxdb3-core --restart unless-stopped -p 18080:18080 \
+  -v influxdb3-data:/var/lib/influxdb3/data \
+  influxdb:3-core influxdb3 serve --node-id=node0 --object-store=file --data-dir=/var/lib/influxdb3/data
+
+# 3. InfluxDB3 Explorer（Web 界面，映射 8888 → 容器 8080，仅本机可访问）
+docker run -d --name influxdb3-explorer --restart unless-stopped -p 127.0.0.1:8888:8080 influxdata/influxdb3-ui:1.8.0
+
 # 验证
-docker ps                                    # redis-twin 状态应为 Up
+docker ps                                    # 三个容器状态应为 Up
 docker exec -it redis-twin redis-cli ping   # 返回 PONG 即正常
+curl http://localhost:18080/health           # 返回 {"status":"ok"}
+# Explorer：浏览器打开 http://localhost:8888
 
 # 重启电脑后若未自动起，手动拉起：
-docker start redis-twin
-
-# 重要：旧 Windows Redis 服务请设为“禁用”，否则会抢占 6379 导致容器绑定失败
-# （管理员 PowerShell:  sc config Redis start= disabled）
+docker start redis-twin influxdb3-core influxdb3-explorer
 </pre>
+<p style="color:var(--muted);font-size:12px;margin:8px 0 0;">以上为官方默认镜像与端口；若你本地容器名/端口不同，请按实际 <code>docker run</code> 配置调整。后端当前使用 Redis Pub/Sub 做解耦中转，InfluxDB 作为时序存储按需接入。</p>
 </details>
 </div>
 </section>
 
 
-<!-- ═══════════════ 脚本 ═══════════════ -->
-<section id="scripts">
-<h2 class="section-title">工具脚本 <span class="tag script">scripts/</span></h2>
-
-<div class="grid-2">
-
+<!-- ═══════════════ 启动方式 ═══════════════ -->
+<section id="run">
+<h2 class="section-title">启动方式 <span class="tag doc">README.md</span></h2>
 <div class="module">
-<h4>start_frontend.bat <span class="tag script">启动前端</span></h4>
-<div class="path">scripts/start_frontend.bat</div>
-<div class="desc">自动 <code>npm install</code>（若 node_modules 不存在），然后 <code>npm run dev</code> 启动 Vite 开发服务器。</div>
-</div>
-
-<div class="module">
-<h4>start_backend.bat <span class="tag script">启动后端</span></h4>
-<div class="path">scripts/start_backend.bat</div>
-<div class="desc">调用 Miniconda 环境 <code>DT</code> 下的 Python 执行 <code>python -m src.main</code>。提示连接信息。</div>
-</div>
-
-<div class="module">
-<h4>test_connection.py <span class="tag script">后端连接测试</span></h4>
-<div class="path">scripts/test_connection.py</div>
-<div class="desc">独立脚本，用于验证后端是否正确接收和转发数据。</div>
-</div>
-
+<div class="desc">本仓库<b>不含任何启动脚本</b>，所有组件均通过手动命令启动（后端 <code>python -m src.main</code>、前端 <code>npm run dev</code>、InfluxDB / Explorer 等见根目录 <code>README.md</code> 的「手动启动」一节）。</div>
 </div>
 </section>
 
@@ -744,9 +751,9 @@ docker start redis-twin
 </div>
 
 <div class="module">
-<h4>main_model.spp <span class="tag sim">仿真模型</span></h4>
-<div class="path">simulation/models/main_model.spp</div>
-<div class="desc">PlantSimulation 仿真模型文件（需 PlantSim 软件打开）。</div>
+<h4>simulation/ <span class="tag sim">仿真对接</span></h4>
+<div class="path">simulation/</div>
+<div class="desc">PlantSimulation 对接资源目录。仿真模型文件（<code>.spp</code>）<b>不开源、不随仓库提供</b>，请自行准备；<code>simulation/scripts/</code> 下提供可复用的 SimTalk Socket 通信脚本示例。</div>
 </div>
 
 </div>
