@@ -29,7 +29,7 @@ function connectWebSocket() {
       const data = JSON.parse(event.data);
       dataHandler.process(data);
       const raw = data.value || data.raw || JSON.stringify(data);
-      ui.updateInfo(📊 最新数据: );
+      ui.updateInfo('📊 最新数据:' );
     } catch (e) {
       console.error('解析数据出错:', e);
     }
