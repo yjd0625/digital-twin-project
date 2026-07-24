@@ -171,15 +171,15 @@ export async function loadDXFModel(scene, url, options = {}) {
   var pmat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.02, side:THREE.DoubleSide, depthWrite:false });
   var cp = new THREE.Mesh(pgeo, pmat); cp.position.set((mx+nx)/2, (my+ny)/2, 0); group.add(cp);
 
-  // 居中 + 自适应缩放
+  // 居中，按 scale 缩放（无参数默认 1，保留原始尺寸）
+  var sc = options.scale ?? 1;
+  if (sc !== 1) group.scale.set(sc, sc, sc);
   var box = new THREE.Box3().setFromObject(group);
   var center = box.getCenter(new THREE.Vector3());
   var size = box.getSize(new THREE.Vector3());
-  var maxDim = Math.max(size.x, size.y, size.z);
-  var sc = maxDim > 0 ? 3 / maxDim : 1;
-  group.scale.set(sc, sc, sc);
   var pos = options.position || [0, 0, 0];
-  group.position.set(pos[0] - center.x * sc, -box.min.y * sc, pos[2] - center.z * sc);
+  group.position.set(pos[0] - center.x * sc, (pos[1] - box.min.y) * sc, pos[2] - center.z * sc);
+  console.log("DXF bounding box:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1), "scale:", sc);
 
   // 图纸旋转：DXF 是 XY 平面，平铺到 XZ 地面
   group.rotation.x = -(options.rotateX || Math.PI / 2);
@@ -188,7 +188,7 @@ export async function loadDXFModel(scene, url, options = {}) {
   if (options.label) {
     var div = document.createElement("div"); div.textContent = options.label;
     div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-    var lbl = new CSS2DObject(div); lbl.position.set(0, size.y * sc / 2 + 0.5, 0); group.add(lbl);
+    var lbl = new CSS2DObject(div); lbl.position.set(0, size.y / 2 + 0.5, 0); group.add(lbl);
   }
 
   scene.add(group);
