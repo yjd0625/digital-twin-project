@@ -1,0 +1,16 @@
+(*
+  描述: Socket 服务器 - 在 PlantSimulation 中创建 Socket 对象并监听连接
+  用法: 启动时运行一次，之后自动收发数据
+*)
+
+-- 创建 Socket 对象
+var soc : object
+soc := Socket.Create
+
+-- 启动 TCP 服务器
+soc.Open( 30000 )
+print "Socket server started on port 30000"
+
+-- 等待 Python 后端连接
+soc.Accept
+print "Python backend connected"

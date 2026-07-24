@@ -1,0 +1,10 @@
+(*
+  描述: 向 Python 后端发送仿真数据
+  格式: 设备名,指标,数值
+*)
+
+var soc : object
+soc := Socket.Create
+
+-- 简写发送一行数据
+soc.SendLine( "machine_01,TEMP," + num_to_str( ?.getStatNumIn(1) ) )
