@@ -151,10 +151,10 @@ export async function loadDXFModel(scene, url, options = {}) {
         for (var vi = 1; vi < ent.vertices.length; vi++) addSeg(ent.vertices[vi-1].x, ent.vertices[vi-1].y, ent.vertices[vi].x, ent.vertices[vi].y);
         if (ent.closed) { var v = ent.vertices; addSeg(v[v.length-1].x, v[v.length-1].y, v[0].x, v[0].y); }
       } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
-        for (var a = 0; a < 64; a++) { var a1 = (a/64)*Math.PI*2, a2 = ((a+1)/64)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
+        for (var a = 0; a < 16; a++) { var a1 = (a/64)*Math.PI*2, a2 = ((a+1)/64)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
       } else if (ent.type === "ARC" && ent.center && ent.radius) {
         var sa = (ent.startAngle||0)*Math.PI/180, ea = (ent.endAngle||360)*Math.PI/180;
-        for (var i=0;i<32;i++) { var a1=sa+(ea-sa)*(i/32), a2=sa+(ea-sa)*((i+1)/32); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
+        for (var i=0;i<12;i++) { var a1=sa+(ea-sa)*(i/32), a2=sa+(ea-sa)*((i+1)/32); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
       }
     } catch(e2) {}
   });
@@ -167,8 +167,8 @@ export async function loadDXFModel(scene, url, options = {}) {
 
   // 透明点击面（方便选中）
   var pw = Math.max(mx - nx || 1, 1), ph = Math.max(my - ny || 1, 1);
-  var pgeo = new THREE.PlaneGeometry(pw * 1.2, ph * 1.2);
-  var pmat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.02, side:THREE.DoubleSide, depthWrite:false });
+  var pgeo = new THREE.PlaneGeometry(pw * 0.5, ph * 0.5);
+  var pmat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.005, side:THREE.DoubleSide });
   var cp = new THREE.Mesh(pgeo, pmat); cp.position.set((mx+nx)/2, (my+ny)/2, 0); group.add(cp);
 
   // 居中，按 scale 缩放（无参数默认 1，保留原始尺寸）
@@ -178,7 +178,7 @@ export async function loadDXFModel(scene, url, options = {}) {
   var center = box.getCenter(new THREE.Vector3());
   var size = box.getSize(new THREE.Vector3());
   var pos = options.position || [0, 0, 0];
-  group.position.set(pos[0] - center.x * sc, (pos[1] - box.min.y) * sc, pos[2] - center.z * sc);
+  group.position.set(pos[0] - center.x, pos[1] - box.min.y, pos[2] - center.z );
   console.log("DXF bounding box:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1), "scale:", sc);
 
   // 图纸旋转：DXF 是 XY 平面，平铺到 XZ 地面

@@ -55,7 +55,7 @@ async function loadAllModels() {
   // --- GLTF/GLB 设备模型 ---
   const configs = [
     { url: "/models/assembleStation.glb", label: "组装工位", count: 4, positions: [[0,0,0],[4,0,0],[0,0,4],[4,0,4]] },
-    { url: "/models/telescopicFork.glb", label: "伸缩臂", count: 1, positions: [[-4,0,0]] },
+    { url: "/models/telescopicFork.glb", label: "伸缩臂", count: 1, positions: [[-4,0,-5]] },
     { url: "/models/weldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[-4,0,4],[-4,0,-4]] },
   ];
   for (const cfg of configs) {
@@ -68,7 +68,9 @@ async function loadAllModels() {
 
   // --- DXF 产线布局图 ---
   try {
-    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 0], scale: 0.001 });
+    console.time("DXF load");
+    const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, -2.4, 0], scale: 0.001 });
+    console.timeEnd("DXF load");
     if (layout) allModelInstances.push(layout);
   } catch(e) { console.warn("DXF layout load failed:", e); }
   return allModelInstances;
