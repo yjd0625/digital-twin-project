@@ -43,12 +43,21 @@
 ### 方式一：Docker Compose 一键启动（推荐）
 
 1. 安装 Docker Desktop 并启动。
-2. 复制环境变量模板并填写：
+2. 复制环境变量模板并**填写令牌**（必填）：
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 INFLUXDB3_AUTH_TOKEN 与 EXPLORER_SESSION_SECRET_KEY
 ```
+
+用编辑器打开 `.env`，设置以下两项（其余保持默认即可）：
+
+- **`INFLUXDB3_AUTH_TOKEN`（必填）**：InfluxDB 3 Core 管理员令牌。必须带 `apiv3_` 前缀，例如：
+  - 生成：`openssl rand -hex 16`，取输出拼上前缀 `apiv3_`，例如 `apiv3_9f2a7c4e8b1d2c3f`；
+  - 该令牌由 `influxdb3/entrypoint.sh` 通过 `--admin-token-file` 预设为 InfluxDB 的**服务端** admin token，并同时经 `DEFAULT_API_TOKEN` 注入 Explorer / 后端，**三方共用同一令牌、无需手动配置 Explorer**。
+  - ⚠️ 重要：`INFLUXDB3_AUTH_TOKEN` 环境变量本身**只用于 InfluxDB CLI 客户端认证**，`influxdb3 serve` 不会读取它来预设 token。本项目用 entrypoint 脚本把同一个值写成离线 token 文件来预设，从而服务端 token 与 `.env` 始终一致。
+- **`EXPLORER_SESSION_SECRET_KEY`（建议填）**：`openssl rand -hex 32` 取输出填入，用于 Explorer 会话安全。
+
+> 只需安装 Docker（含 Compose 插件）即可，无需在本机装 Python / Node.js——后端与前端都在各自容器内构建运行。
 
 3. 一键启动：
 
@@ -75,12 +84,7 @@ docker compose restart frontend   # 单独重启某服务
 docker compose down               # 停止全部（加 -v 删除 redis 数据卷）
 ```
 
-> **获取 InfluxDB 管理员令牌**：首次 `docker compose up` 后，InfluxDB 容器已用 `.env` 里的 `INFLUXDB3_AUTH_TOKEN` 启动。若该令牌为空或想重置，运行：
-> ```bash
-> docker exec dt-influxdb3 influxdb3 create token --admin --host http://127.0.0.1:18080
-> ```
-> 把输出的 `apiv3_...` 填入 `.env` 的 `INFLUXDB3_AUTH_TOKEN`，然后 `docker compose up -d` 重建相关容器。
-> （原生 InfluxDB 首次启动也会在控制台打印该令牌。）
+> **令牌说明**：InfluxDB 与 Explorer 与后端共用 `.env` 里的 `INFLUXDB3_AUTH_TOKEN`（见上方第 2 步），由 `influxdb3/entrypoint.sh` 预设为服务端 token。若之后要**更换**令牌：先在 `.env` 改 `INFLUXDB3_AUTH_TOKEN`，再清空 `./.docker/influxdb3-data` 目录内容（保留空文件夹），然后 `docker compose up -d influxdb3 explorer` 重建——InfluxDB 会用新令牌重新初始化，Explorer 同步新值。注意：不重建数据目录直接改 `.env` 会因"已存在 token 与新 token 不符"而报 `INVALID_TOKEN_CORE`。
 
 ---
 
@@ -225,6 +229,14 @@ Explorer 后端运行在 Docker 容器内，通过 `http://host.docker.internal:
 - 必须挂载可写 `db` 卷并设置 `SESSION_SECRET_KEY`，否则报 `Error while getting session data`。
 
 > 安全提示：`0.0.0.0:18080` 会把 InfluxDB 暴露到本机所在局域网。本机开发通常无碍；若在不可信网络，可改为绑定具体内网 IP。
+
+## InfluxDB 令牌排错（INVALID_TOKEN_CORE）
+
+若 Explorer 日志出现 `INVALID_TOKEN_CORE` / `Invalid API token for Core/Enterprise product`（HTTP 401），说明 Explorer 发去的 token 与 InfluxDB 实际接受的 token 不一致。成因与解决：
+
+- **根因**：`INFLUXDB3_AUTH_TOKEN` 环境变量只供 CLI 客户端认证，`influxdb3 serve` 不会用它预设 token。本项目已用 `influxdb3/entrypoint.sh` 通过 `--admin-token-file` 把 `.env` 的 token 预设为服务端 token；若你跳过 entrypoint、直接在 compose 里只写 `INFLUXDB3_AUTH_TOKEN` 环境变量，InfluxDB 会自己生成随机 token，与 Explorer 的 `.env` token 不符 → 必报此错。
+- **旧数据目录残留**：InfluxDB 数据目录（`.docker/influxdb3-data`）里已存有之前自动生成的 token，而你后来改了 `.env` 的 token。解决：清空 `.docker/influxdb3-data` 内容 → `docker compose up -d influxdb3 explorer` 重建。
+- **确认一致**：InfluxDB / Explorer / 后端三处的 token 必须完全相同（都来自 `.env` 的 `INFLUXDB3_AUTH_TOKEN`）。改 `.env` 后切记重建 influxdb3（并清空其数据目录）。
 
 ## 数据流
 

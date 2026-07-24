@@ -1,14 +1,16 @@
-# 数字孪生全栈 Docker 编排
+# 数字孪生全栈 Docker 编排（开源友好版）
 # 用法（在本文件所在目录）：
-#   启动： docker compose up -d
-#   看日志：docker compose logs -f <服务名>     例：docker compose logs -f backend
-#   停止： docker compose down                   （加 -v 会删 redis 数据卷）
+#   1) 复制环境变量模板并填写： cp .env.example .env   （详见 README「配置令牌」一节）
+#   2) 启动： docker compose up -d
+#   看日志： docker compose logs -f <服务名>     例：docker compose logs -f backend
+#   停止： docker compose down                   （加 -v 会删 redis/explorer 数据卷）
 # 各服务端口（均映射到宿主，浏览器从宿主 localhost 访问）：
 #   frontend  :8080(容器5173)   backend :8300(/ws)   influxdb3 :18080   explorer :8888   redis :6379
 #   注：宿主 5173/5180 均落在 Windows/WSL2 保留段 5170-5269（excluded port range），Docker 映射报
 #       access forbidden；故前端宿主映射改用 8080（不在任何保留段）。容器内仍是 5173，HMR/WS 不受影响。
 # 说明：前端是浏览器应用，连 ws://localhost:8300/ws；后端把 8300 发布到宿主，故代码无需改。
 #      后端连 PlantSimulation 走 host.docker.internal:30000，要求 PlantSim 监听 0.0.0.0（非仅 127.0.0.1）。
+#      数据全部用「项目内相对路径 + 命名卷」，不依赖任何本机绝对路径，clone 后在任意平台均可直接 up。
 
 name: digital-twin
 
@@ -32,20 +34,18 @@ services:
     ports:
       - "18080:18080"
     environment:
-      # 固定管理员令牌，与现有 token.txt 一致 → Explorer 现有配置直接可用
+      # 注意：INFLUXDB3_AUTH_TOKEN 仅用于 CLI 客户端认证，serve 不会用它预设 admin token。
+      # 真正的服务端 admin token 由 ./influxdb3/entrypoint.sh 通过 --admin-token-file 预设，
+      # 其值取自同一个 .env 变量，故 InfluxDB / Explorer / backend 三方 token 始终一致。
       INFLUXDB3_AUTH_TOKEN: ${INFLUXDB3_AUTH_TOKEN}
-    command:
-      - influxdb3
-      - serve
-      - --node-id=${NODE_ID}
-      - --object-store=file
-      - --data-dir=/var/lib/influxdb3/data
-      - --plugin-dir=/var/lib/influxdb3/plugins
-      - --http-bind=0.0.0.0:18080
+      NODE_ID: ${NODE_ID}
+    command: ["sh", "/entrypoint.sh"]
     volumes:
-      # 复用现有数据目录（测试数据都在这里），不丢
-      - D:/influxdb3/docker-data:/var/lib/influxdb3/data
-      - D:/influxdb3/plugins:/var/lib/influxdb3/plugins
+      # 项目自包含数据目录（相对路径，跨平台；不依赖本机 D:\influxdb3）
+      - ./.docker/influxdb3-data:/var/lib/influxdb3/data
+      - ./.docker/influxdb3-plugins:/var/lib/influxdb3/plugins
+      # entrypoint 脚本（不含任何 token，仅从环境变量生成 token 文件）
+      - ./influxdb3/entrypoint.sh:/entrypoint.sh
     networks:
       - dt-net
     restart: unless-stopped
@@ -59,14 +59,14 @@ services:
     environment:
       SESSION_SECRET_KEY: ${EXPLORER_SESSION_SECRET_KEY}
       DEFAULT_API_TOKEN: ${INFLUXDB3_AUTH_TOKEN}
-      # 经宿主网关访问 InfluxDB（与现有 config.json 一致）
+      # 浏览器侧经宿主网关访问 InfluxDB（Explorer UI 在用户浏览器运行，host.docker.internal 指向宿主）
       DEFAULT_INFLUX_SERVER: http://host.docker.internal:18080
       DEFAULT_SERVER_NAME: Local InfluxDB 3
       DEFAULT_INFLUX_DATABASE: ""
     command: ["--mode=admin"]
     volumes:
-      - D:/influxdb3/explorer/config:/app-root/config:ro
-      - D:/influxdb3/explorer/db:/db:rw
+      # 不 bind 本机 config；token/server 由上方环境变量注入。会话数据用命名卷持久化
+      - explorer-db:/db
     depends_on:
       - influxdb3
     networks:
@@ -101,6 +101,9 @@ services:
     depends_on:
       - redis
       - influxdb3
+    # 跨平台兼容：让容器内可解析 host.docker.internal（Linux 默认不解析，Windows/mac 已内置）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - dt-net
     restart: unless-stopped
@@ -132,6 +135,7 @@ services:
 
 volumes:
   redis-data:
+  explorer-db:
 
 networks:
   dt-net:
