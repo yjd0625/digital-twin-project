@@ -34,6 +34,10 @@
  * 3) 复位（后端触发，清空动作队列并复位到默认姿态）：
  * { "type": "reset" }
  *
+ * 4) 创建模型（后端触发，实例化一个新模型并加入场景）：
+ * { "type": "create", "object": "RobotArm", "position": [0,0,0], "id": "搬运机器人 #1" }
+ *
+ * 【约定】
  * - state 为"部分覆盖"：只改给定的轴，未给的轴保持现状。
  * - 队列按零件并发：同一零件（含整体根节点）的下一条指令顺序执行，不同零件并发。
  * - 动作通道时长优先级：通道 duration > 通道 speed（位移/速度，匀速）> command 级 duration（缺省 1.0s 并打印提示）。
@@ -98,6 +102,7 @@ export class DataHandler {
     this.activeAnimations = new Map();     // key=id::part → {part, from, to, elapsed, duration}
     this.simulateSpeed = 1;                // 动画播放倍率（来自 state.simulateSpeed）
     this.onResetRequested = null;          // 后端 "reset" 时回调（由 main.js 注入 resetAll）
+    this.onCreateModel = ctx.onCreateModel || null;  // 后端 "create" 时回调（main.js 注入实际建模逻辑）
   }
 
   // ======================== 入口：收到后端数据 ========================
@@ -109,7 +114,9 @@ export class DataHandler {
       ? `stations=${data.stations ? data.stations.length : 0}, simulateSpeed=${data.simulateSpeed}`
       : type === "action"
         ? `commands=${data.commands ? data.commands.length : 0}`
-        : "";
+        : type === "create"
+          ? `object=${data.object}, position=${JSON.stringify(data.position)}`
+          : "";
     console.log(`[DataHandler] 收到后端消息 type="${type}"${summary ? " | " + summary : ""}${data.timestamp ? " | ts=" + data.timestamp : ""}`);
     this.latestData = data;
 
@@ -124,11 +131,48 @@ export class DataHandler {
     } else if (type === "reset") {
       this.clearActions();
       if (this.onResetRequested) this.onResetRequested();  // 触发前端复位（含清选择框）
+    } else if (type === "create") {
+      this.createModel(data);
     } else {
       // "state" 及未知类型均按状态同步处理
       this.applyState(data);
     }
     return data;
+  }
+
+  // ======================== 动态创建模型（后端 create 指令）========================
+  /**
+   * 处理后端 "create" 指令：实例化一个新模型并加入场景。
+   * 真实建模逻辑（加载 GLB / 克隆模板 / 加入场景 / 登记查找表）由 main.js 通过
+   * ctx.onCreateModel 注入，这里只做字段校验与分发，保持 DataHandler 与 Three.js 解耦。
+   */
+  createModel(msg) {
+    if (!msg || !msg.object) {
+      console.warn("[DataHandler] create 指令缺少 object 字段，已跳过:", msg);
+      return;
+    }
+    const position = (msg.position && Array.isArray(msg.position)) ? msg.position : [0, 0, 0];
+    const opts = {
+      id: msg.id,                      // 实例 id（缺省用 object）
+      parts: msg.parts,                // 可选：零件白名单，用于预填 userData.parts 缓存
+      scale: msg.scale,                // 可选：整体缩放
+      rotateX: msg.rotateX,            // 可选：整体绕 X 旋转（弧度）
+      autoAlignGround: msg.autoAlignGround,  // 可选：是否贴地居中（默认 true）
+    };
+    if (typeof this.onCreateModel === "function") {
+      const p = this.onCreateModel(msg.object, position, opts);
+      if (p && typeof p.catch === "function") {
+        p.catch((e) => console.error("[DataHandler] create 建模失败:", e));
+      }
+    } else {
+      console.warn("[DataHandler] 未配置 onCreateModel 回调，无法创建模型:", msg.object);
+    }
+  }
+
+  /** 由 main.js 在创建完成后调用，把新实例登记进 id→模型 查找表 */
+  registerModel(id, model) {
+    if (!id || !model) return;
+    this.modelMap.set(id, model);
   }
 
   // ======================== 状态同步（瞬间应用）========================
