@@ -1,9 +1,8 @@
 # Digital Twin - PlantSimulation 数字孪生系统
 
-基于 PlantSimulation 的 3D 数字孪生可视化系统：后端通过 TCP 接入 PlantSimulation 仿真，经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据存入 InfluxDB 3，可通过 InfluxDB3 Explorer 查看。
+基于 PlantSimulation 的 3D 数字孪生可视化系统：后端通过 TCP 接入 PlantSimulation 仿真，经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可存入 InfluxDB 3，通过 InfluxDB3 Explorer 查看。
 
 > 本仓库是**源码仓库**（前端 + 后端 + 文档）。运行所需的若干组件需你在本机自行安装或准备——详见下方「仓库内含 / 需自准备」对照表。
-> ，所有组件均通过下方的手动命令启动。
 
 ## 仓库内含 / 需自准备
 
@@ -15,26 +14,81 @@
 | `frontend/` | Three.js 3D 可视化前端（Vite） |
 | `simulation/` | PlantSimulation 仿真相关（含示例 SimTalk 脚本） |
 | `docs/` | 接口、架构、部署文档 |
+| `docker-compose.yml` | 一键编排全部组件（Redis / InfluxDB 3 / Explorer / 后端 / 前端） |
+| `.env.example` | Docker Compose 环境变量模板（复制为 `.env` 后填写） |
 | `requirements.txt` | 后端 Python 依赖清单 |
 
 ### 🔧 需你本机自行安装 / 准备（**不在仓库内**）
 
 | 组件 | 用途 | 是否必选 | 怎么准备 |
 |------|------|----------|----------|
-| **Redis** | 消息总线，解耦 Plant 采集端与前端订阅端（必选；`BUS_TYPE` 目前仅支持 `redis`） | **必选** | Docker 跑 `redis-twin` 容器，或本机原生安装 |
-| **Python** | 运行后端 | **必选** | 建议用 conda 建 `DT` 环境并 `pip install -r requirements.txt` |
-| **Node.js** | 运行前端 | **必选** | 安装后 `npm install` |
-| **InfluxDB 3 Core** | 时序数据库（可选增强） | 可选 | 官网下载，装到本机 |
-| **Docker Desktop** | 用于跑 Redis 与 Explorer 容器 | 可选（用原生 Redis 时不需要） | 安装并启动 |
-| **PlantSimulation** | 仿真数据来源 | 可选（实时仿真数据来源） | 自行安装（商业软件，不随仓库提供） |
+| **Docker Desktop** | 方式一（推荐）用它一键编排全部组件 | 方式一必选 | 安装并启动 |
+| **Python** | 运行后端（方式二） | 方式二必选 | 建议用 conda 建 `DT` 环境并 `pip install -r requirements.txt` |
+| **Node.js** | 运行前端（方式二） | 方式二必选 | 安装后 `npm install` |
+| **Redis** | 消息总线（必选；`BUS_TYPE` 目前仅支持 `redis`） | 必选 | 方式一由 compose 自动起；方式二用 `docker run redis` 或本机原生 |
+| **InfluxDB 3 Core** | 时序数据库（可选增强） | 可选 | 方式一由 compose 起；方式二官网下载原生二进制 |
+| **PlantSimulation** | 仿真数据来源 | 可选 | 自行安装（商业软件，不随仓库提供） |
 
+> 必选 = 后端 + 前端 + Redis（方式一由 compose 提供 Redis；方式二需你自备）。InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
 
-> 必选 = 后端 + 前端 + Redis，三者缺一不可；InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
+## 快速开始
 
+本项目提供两种**等价**的启动方式，**都不依赖任何启动脚本**（脚本不在仓库内）：
 
-## 手动启动（逐步）
+- **方式一：Docker Compose 一键启动（推荐）**——一条命令起全部五个组件。
+- **方式二：原生命令行逐步启动**——在本机 Python / Node / Docker 环境里分别敲命令，便于单步调试。
 
-### 1. Redis（消息总线，必选）
+---
+
+### 方式一：Docker Compose 一键启动（推荐）
+
+1. 安装 Docker Desktop 并启动。
+2. 复制环境变量模板并填写：
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入 INFLUXDB3_AUTH_TOKEN 与 EXPLORER_SESSION_SECRET_KEY
+```
+
+3. 一键启动：
+
+```bash
+docker compose up -d
+```
+
+启动后访问：
+
+| 组件 | 地址 |
+|------|------|
+| 前端 | http://localhost:8080 |
+| 后端 WebSocket | ws://localhost:8300/ws |
+| InfluxDB 3 | http://localhost:18080 |
+| Explorer | http://localhost:8888 |
+| Redis | 6379（容器内，自动编排，无需单独起） |
+
+常用命令：
+
+```bash
+docker compose ps                 # 查看五个容器状态
+docker compose logs -f backend    # 跟踪某服务日志（排错用）
+docker compose restart frontend   # 单独重启某服务
+docker compose down               # 停止全部（加 -v 删除 redis 数据卷）
+```
+
+> **获取 InfluxDB 管理员令牌**：首次 `docker compose up` 后，InfluxDB 容器已用 `.env` 里的 `INFLUXDB3_AUTH_TOKEN` 启动。若该令牌为空或想重置，运行：
+> ```bash
+> docker exec dt-influxdb3 influxdb3 create token --admin --host http://127.0.0.1:18080
+> ```
+> 把输出的 `apiv3_...` 填入 `.env` 的 `INFLUXDB3_AUTH_TOKEN`，然后 `docker compose up -d` 重建相关容器。
+> （原生 InfluxDB 首次启动也会在控制台打印该令牌。）
+
+---
+
+### 方式二：原生命令行逐步启动（不依赖 Docker 编排）
+
+适合想用本机 Python / Node 环境直接调试的场景。每个组件都是独立命令，**无需任何 `.bat` / 脚本**。
+
+#### 1. Redis（消息总线，必选）
 
 ```bash
 docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
@@ -43,7 +97,7 @@ docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-al
 `6379` 端口需可用。验证：`docker exec redis-twin redis-cli ping` → `PONG`（本机装了 redis-cli 也可直接 `redis-cli ping`）。
 本机已原生安装 Redis 并设为自启动的，可跳过这一步。
 
-### 2. InfluxDB 3 Core（时序库，可选）
+#### 2. InfluxDB 3 Core（时序库，可选）
 
 1. 从官网下载 InfluxDB 3 Core 并解压到本机。
 2. **首次启动会生成管理员令牌**：在终端运行以下命令，控制台会打印一串 `apiv3_...` 令牌，**请保存备用**（前端 / Explorer 连接需用到）。
@@ -57,7 +111,7 @@ docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-al
 
 > ⚠️ 端口避坑：HTTP 端口必须避开 Windows 为 Docker / Hyper-V 预留的区段（用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看）。旧值 `8181/8182` 落在预留段 `8103-8202` 内会绑定失败，故用 `18080/18081`。
 
-### 3. InfluxDB3 Explorer（Web 查看器，可选）
+#### 3. InfluxDB3 Explorer（Web 查看器，可选）
 
 Explorer 是 Docker 容器，直接执行以下单行命令（`<...>` 处替换为你的实际值；`SESSION_SECRET_KEY` 用 `openssl rand -hex 32` 生成一个随机串）：
 
@@ -72,7 +126,7 @@ docker run -d --name influxdb3-explorer -p 127.0.0.1:8888:8080 -v <配置目录>
 - `DEFAULT_*` 环境变量用于让 Explorer 首次启动时自动预载服务器；若不用，也可在 Web 界面手动填写（Server URL 同样填 `http://host.docker.internal:18080`）。
 - 浏览器打开 http://localhost:8888 → 应自动连上 "Local InfluxDB 3"，否则手动 Add Server。
 
-### 4. 后端（FastAPI，必选）
+#### 4. 后端（FastAPI，必选）
 
 ```bash
 conda activate DT            # 或你的 Python 环境
@@ -100,9 +154,8 @@ python -m src.main
 - 写入为 best-effort：写库失败仅记日志，不影响实时孪生流。
 - 建库（首次）：`influxdb3 create database digital_twin`；measurement 首写自动创建，无需预建表。
 - 验证：浏览器开 `http://localhost:8300/status`，看 `influxdb.write_count` 是否增长、`last_error` 是否为 null；或直接到 Explorer 查 `SELECT * FROM station_state`。
-- 也可不启动后端，单独跑 `python scripts/test_influx_write.py` 验证写入链路（用内置样例数据）。
 
-### 5. 前端（Vite，必选）
+#### 5. 前端（Vite，必选）
 
 ```bash
 cd frontend
@@ -112,46 +165,55 @@ npm run dev
 
 浏览器打开 http://localhost:5173（前端通过 `ws://localhost:8300/ws` 连后端）。
 
-### 6. PlantSimulation（仿真数据源，可选）
+> 若本机 `5173` 被占用（常见于 Windows + WSL2 把该端口划为系统保留），可在 `frontend/vite.config.js` 改 `server.port`，或改用方式一的 Docker 前端（默认 8080，已避开常见保留段）。
+
+#### 6. PlantSimulation（仿真数据源，可选）
 
 1. 准备好仿真模型（`.spp` 不随仓库提供）。
 2. 运行仿真，类库中添加 Socket 。
 3. 确保 Socket 服务器已启动，监听 `30000` 端口。
 
-### 7. 访问
+#### 7. 访问
 
-浏览器打开 http://localhost:5173 即可看到 3D 可视化。
+浏览器打开对应前端地址即可看到 3D 可视化：
+- 方式一（Docker）：http://localhost:8080
+- 方式二（原生）：http://localhost:5173
 
-## 最小可跑（后端 + 前端 + Redis，无需 InfluxDB / Explorer / Docker）
-
-必选三件套即可让整套服务跑起来（无实时时序数据落库，但实时孪生流可工作）：确保 Redis 已启动（见步骤 1），然后：
-
-```bash
-# 终端 1 - 后端
-conda activate DT
-cd backend
-python -m src.main
-
-# 终端 2 - 前端
-cd frontend
-npm install
-npm run dev
-```
-
-浏览器打开 http://localhost:5173。
+---
 
 ## 端口总览
 
-| 组件 | 端口 | 说明 |
-|------|------|------|
-| Redis | 6379 | 消息总线（必选） |
-| InfluxDB 3 Core | 18080 | 时序库，绑定 `0.0.0.0`（可选） |
-| InfluxDB3 Explorer | 8888 | Web 界面，映射 8888 → 容器 8080（Docker，可选） |
-| 后端 (FastAPI) | 8300 | HTTP 与 WebSocket 共用 |
-| 前端 (Vite) | 5173 | 3D 可视化 |
-| PlantSimulation | 30000 | 仿真 TCP 端口（可选） |
+| 组件 | 方式一 Docker 宿主端口 | 方式二 原生命令行端口 | 说明 |
+|------|----------------------|----------------------|------|
+| 前端 (Vite) | **8080**（容器 5173） | 5173 | Docker 方式用 8080 避开 Windows 保留段 |
+| 后端 (FastAPI) | 8300 | 8300 | HTTP 与 WebSocket 共用 |
+| InfluxDB 3 Core | 18080 | 18080 | 绑定 `0.0.0.0` |
+| InfluxDB3 Explorer | 8888 | 8888 | 映射 8888 → 容器 8080 |
+| Redis | 6379 | 6379 | 消息总线（必选） |
+| PlantSimulation | — | 30000 | 仿真 TCP 端口（可选） |
 
-本机端口：`6379`(Redis) · `18080`(InfluxDB) · `8888`(Explorer) · `8300`(后端) · `5173`(前端) · `30000`(PlantSimulation)。若被占用，启动前需释放或改用其他端口。
+> 本机端口：`8080/8300/18080/8888/6379`（Docker）或 `5173/8300/18080/8888/6379`（原生）· `30000`(PlantSimulation)。若被占用，启动前需释放或改用其他端口。
+
+## Windows 端口保留排错
+
+在 **Windows + WSL2 / Docker Desktop** 上，`docker compose up` 偶尔报：
+
+```
+ports are not available: exposing port TCP 0.0.0.0:XXXX -> ... listen tcp ...: bind: access forbidden
+```
+
+这表示该宿主端口被 Windows 划为**排除端口范围（excluded port range）**——并非被某进程占用，杀进程也解不了。原因：Docker 建容器网络时 Windows 会随机保留一段端口给 NAT 用，段内所有端口对 Docker 和本机应用都暂时不可用（5173 / 3000 / 5000 等开发者常用端口尤其易中招）。该保留段是动态的，重启 Windows / Docker 后可能变化。
+
+排查与解决：
+
+```powershell
+# 管理员 PowerShell 查看被保留的端口段
+netsh int ipv4 show excludedportrange protocol=tcp
+```
+
+- 若项目默认端口（如前端 8080）恰好落在某段内，编辑 `docker-compose.yml` 把对应服务的宿主端口改到空闲段（格式 `"宿主端口:容器端口"`），例如 `"9000:5173"`；
+- 本机原生 `npm run dev` 同理：改 `frontend/vite.config.js` 的 `server.port`；
+- 想彻底释放保留段可管理员 PowerShell 执行 `net stop winnat` / `net start winnat`，但重启可能复发，故通常改端口更稳。
 
 ## Explorer 连接 InfluxDB 的关键点
 
@@ -193,8 +255,9 @@ PlantSimulation
 - 仿真: PlantSimulation (SimTalk)
 - 后端: Python + FastAPI + uvicorn + redis (asyncio) + websockets
 - 消息总线: Redis Pub/Sub（传输无关抽象，支持后续平滑切换 MQTT；`BUS_TYPE` 目前仅支持 `redis`）
-- 时序存储: InfluxDB 3 Core（本机原生二进制，端口 18080；Web 界面 InfluxDB3 Explorer 1.9.0 :8888）
+- 时序存储: InfluxDB 3 Core（端口 18080；Web 界面 InfluxDB3 Explorer 1.9.0 :8888）
 - 前端: Three.js + Vite
+- 编排（可选）: Docker Compose 一键起全部组件
 
 ## 文档
 

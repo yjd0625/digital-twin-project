@@ -39,4 +39,4 @@
 | 后端 | Python + FastAPI + redis + websockets + influxdb3-python（InfluxDB 3 旁路写入） |
 | 前端 | Three.js + Vite |
 | 通信 | TCP Socket (仿真<->后端), WebSocket (后端<->前端), Redis Pub/Sub (后端<->后端, 解耦) |
-| 消息总线 | Redis Pub/Sub（统一用 Docker 容器 `redis-twin:6379`；Windows 原生 Redis 支持差，不推荐；主题 plant/state、plant/command） |
+| 消息总线 | Redis Pub/Sub（推荐用 Docker Compose 编排的 `dt-redis:6379`，或手动 `docker run redis-twin:6379`；Windows 原生 Redis 支持差，不推荐；主题 plant/state、plant/command） |

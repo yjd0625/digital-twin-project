@@ -1,23 +1,37 @@
 # 部署指南
 
+> 本地一键启动见根目录 `README.md` 的「方式一：Docker Compose 一键启动」；本文件补充端口说明与原生逐步部署细节。
+
 ## 端口占用总览
 
-| 组件 | 端口 | 说明 |
-|------|------|------|
-| Redis | 6379 | 消息总线（**必选**） |
-| InfluxDB 3 Core | 18080 | 时序数据库（可选） |
-| InfluxDB3 Explorer | 8888 | InfluxDB Web 界面（映射 8888→容器 8080，可选） |
-| 后端 (FastAPI) | 8300 | HTTP + WebSocket 共用 |
-| 前端 (Vite) | 5173 | 3D 可视化 |
-| PlantSimulation Socket | 30000 | 仿真数据 TCP 端口（可选） |
+| 组件 | 方式一 Docker 宿主端口 | 方式二 原生命令行端口 | 说明 |
+|------|----------------------|----------------------|------|
+| 前端 (Vite) | **8080**（容器 5173） | 5173 | Docker 用 8080 避开 Windows 保留段 |
+| 后端 (FastAPI) | 8300 | 8300 | HTTP + WebSocket 共用 |
+| InfluxDB 3 Core | 18080 | 18080 | 时序数据库（可选） |
+| InfluxDB3 Explorer | 8888 | 8888 | 映射 8888→容器 8080（可选） |
+| Redis | 6379 | 6379 | 消息总线（**必选**） |
+| PlantSimulation Socket | — | 30000 | 仿真数据 TCP 端口（可选） |
 
 > Redis 为必选消息总线；InfluxDB / Explorer / PlantSimulation 为可选增强或数据源。
+> 若 Windows 上报 `access forbidden`，说明该宿主端口被 Windows 划为排除端口范围，见 README「Windows 端口保留排错」一节。
 
 ## 本地开发
 
-> 建议按下列命令手动启动。也可参考根目录 `README.md` 的「手动启动」一节。
+### 方式一：Docker Compose 一键启动（推荐）
 
-### 1. Redis（消息总线，必选）
+```bash
+cp .env.example .env   # 填入 INFLUXDB3_AUTH_TOKEN / EXPLORER_SESSION_SECRET_KEY
+docker compose up -d
+```
+
+启动后前端访问 http://localhost:8080 ，其余地址见 README 端口总览。停止：`docker compose down`（加 `-v` 删 redis 数据卷）。
+
+### 方式二：原生命令行逐步启动
+
+> 以下命令不依赖任何启动脚本，手动逐条执行即可。
+
+#### 1. Redis（消息总线，必选）
 
 ```bash
 docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
@@ -26,7 +40,7 @@ docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-al
 `6379` 端口需可用。验证：`docker exec redis-twin redis-cli ping` → `PONG`。
 本机已原生安装 Redis 并设为自启动的，可跳过这一步。
 
-### 2. InfluxDB 3 Core（时序库，可选）
+#### 2. InfluxDB 3 Core（时序库，可选）
 
 下载二进制并解压到本机，首次启动生成管理员令牌（控制台打印 `apiv3_...`，请保存备用）：
 
@@ -38,7 +52,7 @@ docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-al
 - 端口避开 Docker/Hyper-V 预留段（旧值 `8181/8182` 落在 `8103-8202` 会失败，用 `18080/18081`）。
 - 验证：`curl http://localhost:18080/health` → `401`（需鉴权，属正常）。
 
-### 3. InfluxDB3 Explorer（Web 界面，可选，Docker）
+#### 3. InfluxDB3 Explorer（Web 界面，可选，Docker）
 
 ```bash
 docker run -d --name influxdb3-explorer -p 127.0.0.1:8888:8080 -v <配置目录>:/app-root/config:ro -v <会话库目录>:/db:rw -e SESSION_SECRET_KEY=<随机32字节hex> -e DEFAULT_API_TOKEN=<你的 apiv3_ 令牌> -e DEFAULT_INFLUX_SERVER=http://host.docker.internal:18080 -e "DEFAULT_SERVER_NAME=Local InfluxDB 3" -e DEFAULT_INFLUX_DATABASE= influxdata/influxdb3-ui:1.9.0 --mode=admin
@@ -51,7 +65,7 @@ docker run -d --name influxdb3-explorer -p 127.0.0.1:8888:8080 -v <配置目录>
 - Windows Docker Desktop 不支持 `--network host`，采用此标准做法；
 - 浏览器开 http://localhost:8888，自动连 "Local InfluxDB 3"；也可在界面手动 Add Server（URL 同上）。
 
-### 4. 后端（FastAPI，必选）
+#### 4. 后端（FastAPI，必选）
 
 ```bash
 cd backend
@@ -62,7 +76,7 @@ python -m src.main
 
 Redis 未运行时后端仍可启动（启动期容错），但数据无法经总线流转；请保证 Redis 已就绪。
 
-### 5. 前端（Vite 开发模式，必选）
+#### 5. 前端（Vite 开发模式，必选）
 
 ```bash
 cd frontend
@@ -70,15 +84,18 @@ npm install
 npm run dev
 ```
 
-### 6. 启动 PlantSimulation（可选）
+浏览器打开 http://localhost:5173 。若本机 5173 被占用（Windows + WSL2 常见），改 `frontend/vite.config.js` 的 `server.port`，或改用方式一的 Docker 前端（默认 8080）。
+
+#### 6. 启动 PlantSimulation（可选）
 
 1. 准备仿真模型（`.spp` 不随仓库提供）
 2. 运行仿真（F5）
 3. 确保 Socket 服务器已启动，监听 `30000` 端口
 
-### 7. 访问前端
+#### 7. 访问前端
 
-浏览器打开 http://localhost:5173
+- 方式一（Docker）：http://localhost:8080
+- 方式二（原生）：http://localhost:5173
 
 ## 生产部署
 
@@ -87,3 +104,4 @@ npm run dev
 - 时序库：InfluxDB 3 Core（可容器化或原生），端口 18080，生产建议挂载持久卷并设置访问令牌
 - 前端：`npm run build` 后，将 `dist/` 部署到 Nginx / IIS
 - Explorer：生产可独立部署 InfluxDB3 Explorer 容器，或用其它 InfluxDB 客户端
+- 一键编排：生产也可用 `docker compose up -d` 起全部组件，建议配合 `.env` 中设置强令牌与 `EXPLORER_SESSION_SECRET_KEY`
