@@ -76,6 +76,81 @@ loadGLTFModel(scene, "/models/assembleStation.glb", {
   })
   .catch((e) => console.warn("Model load failed, keeping cube:", e));
 
+// ======================== 模型选择与移动 ========================
+const _raycaster = new THREE.Raycaster();
+const _mouse = new THREE.Vector2();
+let selectedObject = null;
+let selectionBox = null;
+let isDragging = false;
+let _ptrDown = { x: 0, y: 0 };
+const MOVE_STEP = 0.1;
+const _dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+function selectObject(obj) {
+  if (selectedObject === obj) return;
+  deselectObject();
+  selectedObject = obj;
+  selectionBox = new THREE.BoxHelper(obj, 0x00ff00);
+  selectionBox.update();
+  scene.add(selectionBox);
+}
+function deselectObject() {
+  if (selectionBox) { scene.remove(selectionBox); selectionBox = null; }
+  selectedObject = null;
+}
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  _ptrDown.x = e.clientX; _ptrDown.y = e.clientY;
+});
+renderer.domElement.addEventListener("pointerup", (e) => {
+  const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
+  if (Math.sqrt(dx * dx + dy * dy) > 5) return;
+  const target = dataHandler.objects.cube;
+  if (!target) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_mouse, camera);
+  if (_raycaster.intersectObject(target, true).length > 0) {
+    selectObject(target);
+  } else {
+    deselectObject();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (!selectedObject) return;
+  let moved = true;
+  switch (e.key) {
+    case "ArrowUp":    selectedObject.position.x += MOVE_STEP; break;
+    case "ArrowDown":  selectedObject.position.x -= MOVE_STEP; break;
+    case "ArrowLeft":  selectedObject.position.z -= MOVE_STEP; break;
+    case "ArrowRight": selectedObject.position.z += MOVE_STEP; break;
+    default: moved = false;
+  }
+  if (moved && selectionBox) selectionBox.update();
+});
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  if (e.shiftKey && selectedObject) {
+    isDragging = true;
+    controls.enabled = false;
+  }
+});
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (!isDragging || !selectedObject) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_mouse, camera);
+  const pt = _raycaster.ray.intersectPlane(_dragPlane, new THREE.Vector3());
+  if (pt) {
+    selectedObject.position.x = pt.x;
+    selectedObject.position.z = pt.z;
+    if (selectionBox) selectionBox.update();
+  }
+});
+document.addEventListener("pointerup", () => {
+  if (isDragging) { isDragging = false; controls.enabled = true; }
+});
+
 // ======================== WebSocket 数据通信 ========================
 let ws;
 function connectWebSocket() {
