@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 /**
  * 持久化模块 — 视角切换、位置/旋转/缩放变换持久化（localStorage）
  */
