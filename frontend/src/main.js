@@ -166,6 +166,7 @@ const importer = initImporter(importerCtx);
 
 function resetAll() {
   importer.resetPositions();
+  if (dataHandler) dataHandler.clearActions();
   if (interaction) interaction.deselectAll();
 }
 const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: resetAll, onToggleLabels: toggleLabels });
@@ -182,6 +183,7 @@ loadAllModels()
       updateInfo: ui.updateInfo
     });
     dataHandler.objects.cube = instances[0];
+    dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位
     const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
     interaction = initInteraction(ctx, importer, outlinePass);
 
@@ -231,6 +233,7 @@ function animate() {
   const delta = _clock.getDelta();
   controls.update();
   importer.updateViewTransition(delta);
+  if (dataHandler) dataHandler.updateAnimations(delta);   // 推进动作指令动画
   _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
   axisCam.position.copy(_offset); axisCam.lookAt(0, 0, 0);
   if (USE_OUTLINE && composer && outlinePass && outlinePass.selectedObjects.length > 0) composer.render(delta);

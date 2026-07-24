@@ -1,22 +1,42 @@
 /**
  * data_handler.js — 数据驱动模型的核心映射器
  *
- * 【数据格式约定】
- * PlantSimulation 通过 Socket 发来的 JSON 格式：
+ * 【数据格式约定】后端通过 WebSocket 发来的 JSON，用顶层 "type" 区分两类消息：
+ *
+ * 1) 状态同步（瞬间应用）：
  * {
- *   "stations": [                          // 设备列表
- *     { "id": "assembleStation_1",
- *     "status": "running",
- *     "parts": {        // 零件
- *       "arm": { "x": 0.5, "y": 0.2, "z": 0.0 }
- *     },
- *     "temp": 65.3 },
- * 
- *     { "id": "assembleStation_2", "status": "idle",    "parts": 12, "temp": 30.1 },
- *   ],
- *   "lineSpeed": 12.5,                     // 产线整体参数
- *   "timestamp": 1700000000
+ *   "type": "state",
+ *   "timestamp": 1700000000,
+ *   "simulateSpeed": 2,
+ *   "stations": [
+ *     { "id": "组装工位 #1", "status": "running", "temp": 30,
+ *       "parts": { "Bracket": { "position": {"x":5}, "rotation": {"x":0.8}, "scale": {"z":1.2} } } }
+ *   ]
  * }
+ *
+ * 2) 动作指令（入队，在 animate() 中插值执行）：
+ * {
+ *   "type": "action",
+ *   "commands": [
+ *     { "id": "组装工位 #1",
+ *       "parts": {
+ *         "Bracket":     { "position": {"x":5,   "duration":2.0}, "rotation": {"x":0.8, "duration":1.5} },
+ *         "PositionPin": { "scale":    {"z":1.2, "duration":1.0} }
+ *       } },
+ *     { "id": "搬运机器人 #1",
+ *       "parts": { "RobotBase": { "rotation": {"x":0.8, "z":0.8, "duration":1.5} } } },
+ *     // 用设备自身 id 作 key 可整体变换设备根节点（父节点视作零件）
+ *     { "id": "搬运机器人 #1", "parts": { "TransferRobot": { "position": {"x":3, "duration":2.0} } } }
+ *   ]
+ * }
+ *
+ * 3) 复位（后端触发，清空动作队列并复位到默认姿态）：
+ * { "type": "reset" }
+ *
+ * - state 为"部分覆盖"：只改给定的轴，未给的轴保持现状。
+ * - 队列按零件并发：同一零件（含整体根节点）的下一条指令顺序执行，不同零件并发。
+ * - simulateSpeed 作为动画播放倍率（elapsed += delta * simulateSpeed）。
+ * - 状态优先：state 命中正在动画的零件时，瞬间赋值并取消其动画。
  */
 
 // ---------- 状态 → 颜色映射表 ----------
@@ -30,7 +50,7 @@ const STATUS_COLORS = {
 };
 
 /**
- * DataHandler — 管理所有模型的状态更新
+ * DataHandler — 管理所有模型的状态更新与动作动画
  *
  * @param {Object} ctx - 上下文，含 allModelInstances（模型数组）
  * @param {Function} ctx.updateInfo - 页面 info 栏更新函数
@@ -47,51 +67,196 @@ export class DataHandler {
     this.objects = ctx.objects || {};                      // 向后兼容，预留直接注册接口
     this.updateInfo = ctx.updateInfo || (() => {});
     this.latestData = null;
-  }
 
+    // ======================== 动作队列 / 动画状态 ========================
+    this.actionQueue = [];                 // 待执行指令 [{id, part, target, duration}]
+    this.activeAnimations = new Map();     // key=id::part → {part, from, to, elapsed, duration}
+    this.simulateSpeed = 1;                // 动画播放倍率（来自 state.simulateSpeed）
+    this.onResetRequested = null;          // 后端 "reset" 时回调（由 main.js 注入 resetAll）
+  }
 
   // ======================== 入口：收到后端数据 ========================
   process(data) {
-    const self = this;  // 保留引用，防止嵌套回调中 this 丢失
-    console.log("data_handler 收到 PlantSimulation 数据");
-    self.latestData = data;
-    // 【第一步】整体产线参数（如线速度）
+    if (!data || typeof data !== "object") return data;
+    const type = data.type || "state";     // 无 type 时默认按 state 处理（兼容旧格式）
+    // 接收后端消息日志
+    const summary = type === "state"
+      ? `stations=${data.stations ? data.stations.length : 0}, simulateSpeed=${data.simulateSpeed}`
+      : type === "action"
+        ? `commands=${data.commands ? data.commands.length : 0}`
+        : "";
+    console.log(`[DataHandler] 收到后端消息 type="${type}"${summary ? " | " + summary : ""}${data.timestamp ? " | ts=" + data.timestamp : ""}`);
+    this.latestData = data;
+
+    if (type === "action") {
+      this.enqueueActions(data.commands || []);
+    } else if (type === "reset") {
+      this.clearActions();
+      if (this.onResetRequested) this.onResetRequested();  // 触发前端复位（含清选择框）
+    } else {
+      // "state" 及未知类型均按状态同步处理
+      this.applyState(data);
+    }
+    return data;
+  }
+
+  // ======================== 状态同步（瞬间应用）========================
+  applyState(data) {
+    // 整体产线参数（线速度 / 播放倍率）
     if (data.simulateSpeed !== undefined) {
-      self.updateInfo("线速度: " + data.simulateSpeed.toFixed(1) + " m/s");
+      this.simulateSpeed = data.simulateSpeed;
+      this.updateInfo("线速度: " + data.simulateSpeed.toFixed(1) + " m/s");
     }
 
-    // 【第二步】逐个设备驱动
+    // 逐个设备驱动
     if (data.stations && Array.isArray(data.stations)) {
       for (const station of data.stations) {
-        // 按 id 匹配对应模型
-        const model = self.findModelById(station.id);
+        const model = this.findModelById(station.id);
         if (!model) {
-          console.warn("data_handler: 未找到模型 id=", station.id);
-          continue;  // 跳过当前 station，继续处理下一个
+          console.warn("applyState: 未找到模型 id=", station.id);
+          continue;
         }
 
-        // --- 状态 → 颜色 ---
-        if (station.status) {
-          self.applyStatus(model, station.status);
-        }
+        // 状态 → 颜色
+        if (station.status) this.applyStatus(model, station.status);
 
-        // --- 设备状态控制（位置、旋转）---
+        // 站级整体变换（兼容旧格式，真实数据一般放 parts 里）
         if (station.x !== undefined || station.y !== undefined || station.z !== undefined) {
-          self.applyPosition(model, station);
+          this.applyPosition(model, station);
         }
         if (station.rotationX !== undefined) model.rotation.x = station.rotationX;
         if (station.rotationY !== undefined) model.rotation.y = station.rotationY;
         if (station.rotationZ !== undefined) model.rotation.z = station.rotationZ;
-        
-        // --- 零件状态控制（如机械臂位置）---
-        if (station.parts && typeof station.parts === 'object' && Object.keys(station.parts).length > 0) {
-          self.applyParts(model, station.parts);
-        }
 
+        // 零件变换（瞬间生效，并取消该零件可能正在进行的动画）
+        if (station.parts && typeof station.parts === "object" && Object.keys(station.parts).length > 0) {
+          this.applyParts(model, station.parts);
+        }
       }
     }
+  }
 
-    return data;
+  // ======================== 动作指令（入队 + 动画）========================
+  enqueueActions(commands) {
+    for (const cmd of commands) {
+      if (!cmd || !cmd.id || !cmd.parts) {
+        console.warn("action 指令缺少 id/parts，已跳过:", cmd);
+        continue;
+      }
+      // 一条「设备级」指令拆分为多个「零件级」子任务入队：
+      // 同一指令内的多零件并发执行；同一零件的下一条指令顺序执行。
+      for (const [partName, transforms] of Object.entries(cmd.parts)) {
+        if (!transforms || typeof transforms !== "object") continue;
+        this.actionQueue.push({
+          id: cmd.id,
+          part: partName,
+          target: transforms,
+          duration: cmd.duration !== undefined ? cmd.duration : 1.0,  // command 级 duration，仅作各通道的回退默认值
+        });
+      }
+    }
+    this._pump();
+  }
+
+  /** 启动队列中「对应零件未在动画中」的指令；同零件指令自动排队等待 */
+  _pump() {
+    for (let i = this.actionQueue.length - 1; i >= 0; i--) {
+      const cmd = this.actionQueue[i];
+      const key = cmd.id + "::" + cmd.part;
+      if (!this.activeAnimations.has(key)) {
+        this._start(cmd);
+        this.actionQueue.splice(i, 1);
+      }
+    }
+  }
+
+  /** 把一条指令转为活动动画：记录 from/to（未给定的轴保持现状 → 不动）*/
+  _start(cmd) {
+    const model = this.findModelById(cmd.id);
+    if (!model) { console.warn("action: 未找到模型 id=", cmd.id); return; }
+    const part = this._findPart(model, cmd.part);
+    if (!part) { console.warn(`action: 零件 "${cmd.part}" 在 "${cmd.id}" 中未找到`); return; }
+
+    const from = {
+      pos: part.position.clone(),
+      rot: part.rotation.clone(),
+      scl: part.scale.clone(),
+    };
+    const to = {
+      pos: part.position.clone(),
+      rot: part.rotation.clone(),
+      scl: part.scale.clone(),
+    };
+    // 各通道独立时长：仅当 target 中出现该通道才设置 dur（否则 0 = 不动画）
+    const dur = { pos: 0, rot: 0, scl: 0 };
+    const fallback = (cmd.duration !== undefined) ? cmd.duration : 1.0;
+    const t = cmd.target || {};
+    if (t.position) {
+      if (t.position.x !== undefined) to.pos.x = t.position.x;
+      if (t.position.y !== undefined) to.pos.y = t.position.y;
+      if (t.position.z !== undefined) to.pos.z = t.position.z;
+      dur.pos = (t.position.duration !== undefined) ? t.position.duration : fallback;
+    }
+    if (t.rotation) {
+      if (t.rotation.x !== undefined) to.rot.x = t.rotation.x;
+      if (t.rotation.y !== undefined) to.rot.y = t.rotation.y;
+      if (t.rotation.z !== undefined) to.rot.z = t.rotation.z;
+      dur.rot = (t.rotation.duration !== undefined) ? t.rotation.duration : fallback;
+    }
+    if (t.scale) {
+      if (t.scale.x !== undefined) to.scl.x = t.scale.x;
+      if (t.scale.y !== undefined) to.scl.y = t.scale.y;
+      if (t.scale.z !== undefined) to.scl.z = t.scale.z;
+      dur.scl = (t.scale.duration !== undefined) ? t.scale.duration : fallback;
+    }
+    const key = cmd.id + "::" + cmd.part;
+    this.activeAnimations.set(key, {
+      part, from, to,
+      elapsed: { pos: 0, rot: 0, scl: 0 },
+      dur,
+    });
+  }
+
+  /** 每帧由 main.js 的 animate() 调用：推进所有活动动画（各通道独立时长）*/
+  updateAnimations(delta) {
+    const speed = this.simulateSpeed || 1;
+    for (const [key, a] of this.activeAnimations) {
+      let allDone = true;
+      const channels = [
+        { name: "pos", apply: (t) => a.part.position.lerpVectors(a.from.pos, a.to.pos, t) },
+        { name: "rot", apply: (t) => {
+            a.part.rotation.x = a.from.rot.x + (a.to.rot.x - a.from.rot.x) * t;
+            a.part.rotation.y = a.from.rot.y + (a.to.rot.y - a.from.rot.y) * t;
+            a.part.rotation.z = a.from.rot.z + (a.to.rot.z - a.from.rot.z) * t;
+          } },
+        { name: "scl", apply: (t) => a.part.scale.lerpVectors(a.from.scl, a.to.scl, t) },
+      ];
+      for (const ch of channels) {
+        if (a.dur[ch.name] <= 0) continue;   // 该通道无动画
+        a.elapsed[ch.name] += delta * speed;
+        const t = a.dur[ch.name] > 0 ? Math.min(a.elapsed[ch.name] / a.dur[ch.name], 1) : 1;
+        ch.apply(t);
+        if (t < 1) allDone = false;
+      }
+      if (allDone) this.activeAnimations.delete(key);
+    }
+    // 本轮完成的零件，启动其下一条排队指令
+    this._pump();
+  }
+
+  /** 清空动作队列与所有活动动画（复位时调用）*/
+  clearActions() {
+    this.actionQueue.length = 0;
+    this.activeAnimations.clear();
+  }
+
+  /** 取消某零件的活动动画与排队指令（状态优先于动画）*/
+  _cancel(key) {
+    this.activeAnimations.delete(key);
+    for (let i = this.actionQueue.length - 1; i >= 0; i--) {
+      const c = this.actionQueue[i];
+      if (c.id + "::" + c.part === key) this.actionQueue.splice(i, 1);
+    }
   }
 
   // ======================== 具体驱动函数 ========================
@@ -99,6 +264,18 @@ export class DataHandler {
   /** 按设备 id 查找 Three.js 模型对象（匹配 userData.id） */
   findModelById(id) {
     return this.modelMap.get(id) || null;
+  }
+
+  /** 查找零件：先查 userData.parts 缓存（最快），未命中打印提示并回退 getObjectByName 全局查找 */
+  _findPart(model, partName) {
+    // 约定：partName 等于设备自身 id 时，返回根节点（父节点可作为零件整体变换）
+    if (partName === model.userData.id) return model;
+    let part = model.userData.parts ? model.userData.parts[partName] : undefined;
+    if (!part) {
+      console.info(`零件 "${partName}" 不在 userData.parts 缓存，回退 getObjectByName 全局查找`);
+      part = model.getObjectByName(partName);
+    }
+    return part;
   }
 
   /** 根据运行状态修改模型颜色 */
@@ -118,37 +295,36 @@ export class DataHandler {
     if (pos.z !== undefined) model.position.z = pos.z;
   }
 
-  /** 根据零件数据更新模型的子部件位置或状态 */
+  /** 根据零件数据更新模型的子部件位置/旋转/缩放（瞬间）*/
   applyParts(model, partsData) {
     for (const [partName, transforms] of Object.entries(partsData)) {
-    const part = model.userData.parts?.[partName];
-    if (!part) {
-      console.warn(`零件 "${partName}" 在模型 "${model.userData.id}" 中未找到`);
-      continue;
-    }
+      // 先查 userData.parts 缓存，未命中打印提示并回退 getObjectByName 全局查找
+      const part = this._findPart(model, partName);
+      if (!part) {
+        console.warn(`零件 "${partName}" 在模型 "${model.userData.id}" 中未找到`);
+        continue;
+      }
+      // 状态优先：瞬间赋值前取消该零件可能正在进行的动画
+      this._cancel(model.userData.id + "::" + partName);
 
-    // 应用位置
-    if (transforms.position) {
-      const p = transforms.position;
-      if (p.x !== undefined) part.position.x = p.x;
-      if (p.y !== undefined) part.position.y = p.y;
-      if (p.z !== undefined) part.position.z = p.z;
+      if (transforms.position) {
+        const p = transforms.position;
+        if (p.x !== undefined) part.position.x = p.x;
+        if (p.y !== undefined) part.position.y = p.y;
+        if (p.z !== undefined) part.position.z = p.z;
+      }
+      if (transforms.rotation) {
+        const r = transforms.rotation;
+        if (r.x !== undefined) part.rotation.x = r.x;
+        if (r.y !== undefined) part.rotation.y = r.y;
+        if (r.z !== undefined) part.rotation.z = r.z;
+      }
+      if (transforms.scale) {
+        const s = transforms.scale;
+        if (s.x !== undefined) part.scale.x = s.x;
+        if (s.y !== undefined) part.scale.y = s.y;
+        if (s.z !== undefined) part.scale.z = s.z;
+      }
     }
-
-    // 应用旋转（欧拉角，弧度）
-    if (transforms.rotation) {
-      const r = transforms.rotation;
-      if (r.x !== undefined) part.rotation.x = r.x;
-      if (r.y !== undefined) part.rotation.y = r.y;
-      if (r.z !== undefined) part.rotation.z = r.z;
-    }
-
-    // 应用缩放
-    if (transforms.scale) {
-      const s = transforms.scale;
-      if (s.x !== undefined) part.scale.x = s.x;
-      if (s.y !== undefined) part.scale.y = s.y;
-      if (s.z !== undefined) part.scale.z = s.z;
-    }}
   }
 }
