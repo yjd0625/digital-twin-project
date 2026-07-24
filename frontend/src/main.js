@@ -7,7 +7,7 @@ import { setupUI } from "./ui.js";
 const container = document.body;
 const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
 
-// --- corner coordinate axis (fixed bottom-left) ---
+// --- corner coordinate axis (rotates with main camera) ---
 const axisScene = new THREE.Scene();
 const axisCam = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
 axisCam.position.set(3, 2, 5);
@@ -26,20 +26,29 @@ axisRenderer.domElement.style.zIndex = "1";
 axisRenderer.domElement.style.borderRadius = "6px";
 document.body.appendChild(axisRenderer.domElement);
 
-const device = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
-const dataHandler = new DataHandler({ cube: device });
+// --- data-driven cube (replaced by model when loaded) ---
+let dataDevice = createDefaultDevice(scene, { label: "\u8bbe\u5907 #1" });
+const dataHandler = new DataHandler({ cube: dataDevice });
+
+// --- reference cube (always visible for size comparison) ---
+const refCube = createDefaultDevice(scene, {
+  label: "1m\u00b3 \u53c2\u8003",
+  position: [2.5, 0, 0],
+  color: 0xff8800,
+  emissive: 0x442200,
+});
 
 // --- load real 3D model ---
 loadGLTFModel(scene, "/models/assembleStation.glb", { label: "\u7ec4\u88c5\u5de5\u4f4d" })
   .then((model) => {
-    scene.remove(device);
+    scene.remove(dataDevice);
     dataHandler.objects.cube = model;
 
     // auto-fit camera to model
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = Math.max(maxDim * 1.2, 2);
+    const dist = Math.max(maxDim * 1.5, 3);
     camera.position.set(dist * 0.6, dist * 0.6, dist);
     controls.target.set(0, 0, 0);
     controls.update();
@@ -87,8 +96,13 @@ window.addEventListener("resize", () => {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+
+  // sync corner axis camera with main camera rotation
+  axisCam.position.copy(camera.position).normalize().multiplyScalar(3);
+  axisCam.quaternion.copy(camera.quaternion);
+
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
-  axisRenderer.render(axisScene, axisCam);  // sync axis indicator
+  axisRenderer.render(axisScene, axisCam);
 }
 animate();
