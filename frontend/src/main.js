@@ -127,7 +127,7 @@ async function loadAllModels() {
 // ======================== WebSocket 数据通信 ========================
 let ws;
 function connectWebSocket() {
-  ws = new WebSocket("ws://localhost:8765");
+  ws = new WebSocket("ws://localhost:8000/ws");
   ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
   try { const data = JSON.parse(event.data); if (dataHandler) dataHandler.process(data); }    //加载完成前不处理数据
