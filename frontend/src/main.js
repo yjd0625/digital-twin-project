@@ -50,10 +50,10 @@ const allModelInstances = [];
 // ======================== 加载初始模型（含 DXF 布局图）=======================
 async function loadAllModels() {
   const configs = [
-    { url: "/models/transRobot.glb", label: "搬运机器人", count: 1, positions: [[15,0,0]] },
-    { url: "/models/assembleStation_optimized.glb", label: "组装工位", count: 4, positions: [[5.5,0,-3],[12.5,0,-3],[19.5,0,-3],[26.5,0,-3]] },
-    { url: "/models/weldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]] },
-    { url: "/models/buffer.glb", label: "缓冲区", count: 4, positions: [[6,0,2],[10,0,2],[14,0,2],[18,0,2]] },
+    { url: "/models/TransferRobot.glb", label: "搬运机器人", count: 1, positions: [[15,0,0]] },
+    { url: "/models/AssembleStation.glb", label: "组装工位", count: 4, positions: [[5.5,0,-3],[12.5,0,-3],[19.5,0,-3],[26.5,0,-3]] },
+    { url: "/models/WeldHangingRobot.glb", label: "焊接悬挂机器人", count: 2, positions: [[9,0,-5],[23,0,-5]] },
+    { url: "/models/Buffer.glb", label: "缓冲区", count: 4, positions: [[6,0,2],[10,0,2],[18,0,2],[22,0,2]] },
     // { url: "/models/test.glb", label: "test", count: 1, positions: [[0,0,0]] },
   ];
 
@@ -80,7 +80,7 @@ async function loadAllModels() {
       const lbl = cfg.count > 1 ? cfg.label + " #" + (i + 1) : cfg.label;
       const model = createInstanceFromTemplate(template, {
         label: lbl,
-        rotateX: -Math.PI / 2,
+        // rotateX: -Math.PI / 2,
         position: cfg.positions[i],
         labelOffset: 3,
       });
@@ -91,7 +91,7 @@ async function loadAllModels() {
       const endTime = performance.now();
       if (import.meta.env.DEV) {
         const label = cfg.label || cfg.url;
-        console.log(`GLTF instance created: ${label} (#${i + 1}) (${(endTime - startTime).toFixed(2)} ms)`);
+        console.log(`Instance created: ${label} (#${i + 1}) (${(endTime - startTime).toFixed(2)} ms)`);
       }
     }
   }
@@ -99,9 +99,7 @@ async function loadAllModels() {
   // --- DXF 产线布局图 ---
   // try {
   //   const startTime = performance.now();
-
   //   const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 10], scale: 0.001 });
-
   //   const endTime = performance.now();
   //   if (import.meta.env.DEV) {
   //     console.log(`DXF loaded: (${(endTime - startTime).toFixed(2)} ms)`);
