@@ -2,7 +2,7 @@
  * UI 控制（按钮、信息面板）
  */
 
-export function setupUI(controls, sendCommand) {
+export function setupUI(controls, sendCommand, extra) {
   const infoDiv = document.getElementById('info');
 
   function updateInfo(text, bg = 'rgba(0,0,0,0.7)') {
@@ -24,6 +24,19 @@ export function setupUI(controls, sendCommand) {
   document.getElementById('btn-speed')?.addEventListener('click', () => {
     sendCommand('SPEED:20');
     console.log('Sent: SPEED:20');
+  });
+
+  // view buttons
+  document.getElementById("btn-top")?.addEventListener("click", () => extra?.onView?.("top"));
+  document.getElementById("btn-front")?.addEventListener("click", () => extra?.onView?.("front"));
+  document.getElementById("btn-side")?.addEventListener("click", () => extra?.onView?.("side"));
+  document.getElementById("btn-default")?.addEventListener("click", () => extra?.onView?.("default"));
+  // import
+  document.getElementById("btn-import")?.addEventListener("click", () => {
+    document.getElementById("file-input")?.click();
+  });
+  document.getElementById("file-input")?.addEventListener("change", (e) => {
+    if (e.target.files.length) extra?.onImport?.(e.target.files[0]);
   });
 
   return { updateInfo };

@@ -40,10 +40,29 @@
         #btn-start { background: #4CAF50; color: white; }
         #btn-stop  { background: #f44336; color: white; }
         #btn-speed { background: #2196F3; color: white; }
+        #toolbar {
+            position: absolute; top: 20px; right: 20px; z-index: 100;
+            display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+        }
+        #toolbar button, #toolbar label.btn-like {
+            padding: 6px 12px; font-size: 12px; border: none; border-radius: 5px;
+            cursor: pointer; font-weight: bold; transition: 0.15s;
+            background: rgba(40,40,50,0.85); color: #bbb;
+            font-family: Arial, sans-serif;
+        }
+        #toolbar button:hover, #toolbar label.btn-like:hover { background: #555; color: white; }
     </style>
 </head>
 <body>
     <div id="info">⏳ 等待数据...</div>
+    <div id="toolbar">
+        <button id="btn-import">📂 导入</button>
+        <input type="file" id="file-input" accept=".glb,.gltf" style="display:none">
+        <button id="btn-top">俯视</button>
+        <button id="btn-front">正视</button>
+        <button id="btn-side">侧视</button>
+        <button id="btn-default">默认</button>
+    </div>
     <div id="controls">
         <button id="btn-start">▶ 启动仿真</button>
         <button id="btn-stop">⏸ 暂停仿真</button>
@@ -52,4 +71,5 @@
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
+
 

@@ -93,7 +93,6 @@ const dataHandler = new DataHandler({ cube: dataDevice });
         controls.target.copy(center);
         controls.update();
         console.log("All models loaded:", instances.length);
-        loadPositions();
       })
       .catch((e) => console.warn("Model loading failed:", e));
 
@@ -163,7 +162,6 @@ document.addEventListener("keydown", (e) => {
     default: moved = false;
   }
   if (moved && selectionBox) selectionBox.update();
-  if (moved) savePositions();
 });
 renderer.domElement.addEventListener("pointerdown", (e) => {
   if (e.shiftKey && selectedObject) {
@@ -181,7 +179,6 @@ renderer.domElement.addEventListener("pointermove", (e) => {
   if (pt) {
     selectedObject.position.x = pt.x;
     selectedObject.position.z = pt.z;
-          savePositions();
     if (selectionBox) selectionBox.update();
   }
 });
@@ -214,62 +211,7 @@ function sendCommand(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) { ws.send(msg); }
   else { alert("WebSocket \u672a\u8fde\u63a5"); }
 }
-    // ==== view switching + model import + position persistence ====
-    const VIEW_PRESETS = {
-      top:     { pos: [0, 15, 0.01], target: [0, 0, 0] },
-      front:   { pos: [0, 0, 15],    target: [0, 0, 0] },
-      side:    { pos: [15, 0, 0],    target: [0, 0, 0] },
-      default: { pos: null,          target: [0, 0, 0] },
-    };
-    let _targetCamPos = null;
-    const _targetCtrlTarget = new THREE.Vector3(0, 0, 0);
-    function setView(name) {
-      const cfg = VIEW_PRESETS[name]; if (!cfg) return;
-      if (name === "default") {
-        const b = new THREE.Box3().setFromObject(scene);
-        const s = b.getSize(new THREE.Vector3());
-        const d = Math.max(Math.max(s.x, s.y, s.z) * 1.5, 5);
-        _targetCamPos = new THREE.Vector3(d * 0.6, d * 0.6, d);
-      } else _targetCamPos = new THREE.Vector3(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
-      _targetCtrlTarget.set(cfg.target[0], cfg.target[1], cfg.target[2]);
-    }
-    function importModelFile(file) {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-        try {
-          const gltf = await (new GLTFLoader()).loadAsync(URL.createObjectURL(file));
-          const mdl = gltf.scene;
-          const box = new THREE.Box3().setFromObject(mdl);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const sc = maxDim > 0 ? 3 / maxDim : 1;
-          mdl.scale.set(sc, sc, sc);
-          mdl.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
-          mdl.traverse(function(ch) { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
-          const div = document.createElement("div");
-          div.textContent = file.name.replace(/\.[^.]+$/, "");
-          div.style.cssText = "color:white;font:bold 13px Arial;text-shadow:1px 1px 3px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;border:1px solid #00aaff";
-          const lbl = new CSS2DObject(div); lbl.position.set(0, size.y * sc / 2 + 0.5, 0); mdl.add(lbl);
-          scene.add(mdl); allModelInstances.push(mdl); selectObject(mdl);
-          console.log("Imported:", file.name);
-        } catch(e) { console.error(e); }
-        URL.revokeObjectURL(reader.result);
-      }; reader.readAsDataURL(file);
-    }
-    function savePositions() {
-      const data = allModelInstances.map(function(m) { return { x: m.position.x, y: m.position.y, z: m.position.z }; });
-      localStorage.setItem("dt_model_positions", JSON.stringify(data));
-    }
-    function loadPositions() {
-      const raw = localStorage.getItem("dt_model_positions"); if (!raw) return;
-      try {
-        const data = JSON.parse(raw);
-        allModelInstances.forEach(function(m, i) { if (i < data.length) m.position.set(data[i].x, data[i].y, data[i].z); });
-      } catch(e) { console.warn(e); }
-    }
-const ui = setupUI(controls, sendCommand, { onView: setView, onImport: importModelFile });
+const ui = setupUI(controls, sendCommand);
 connectWebSocket();
 
 // ======================== 窗口尺寸自适应 ========================
@@ -284,13 +226,6 @@ window.addEventListener("resize", () => {
 const _offset = new THREE.Vector3();  // 复用变量，避免每帧 new
 function animate() {
   requestAnimationFrame(animate);
-
-  // camera view transition
-  if (_targetCamPos) {
-    camera.position.lerp(_targetCamPos, 0.06);
-    controls.target.lerp(_targetCtrlTarget, 0.06);
-    if (camera.position.distanceTo(_targetCamPos) < 0.05) _targetCamPos = null;
-  }
   controls.update();
 
   // \u4f4d\u7f6e\u6cbf\u4e3b\u76f8\u673a\u65b9\u5411\u56fa\u5b9a\u8ddd\u79bb\uff0c\u6bcf\u5e27\u91cd\u65b0\u6307\u5411\u539f\u70b9
