@@ -38,12 +38,14 @@ frontend/dist/
 
 # Simulation backup
 simulation/models/backup/
+simulation/models/*.bak
 frontend/src/.history/
 
 .history/
 
 # PlantSimulation model files (proprietary, not included in repo)
 *.spp
+*.spp.bak
 
 # Model backup (large CAD originals)
 frontend/public/models/modelBackup/
