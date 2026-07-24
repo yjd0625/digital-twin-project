@@ -67,19 +67,34 @@ export async function loadGLTFModel(scene, url, options = {}) {
   const scale = options.scale ?? 1;
   if (scale !== 1) model.scale.set(scale, scale, scale);
 
-  // 修正朝向：某些 CAD 导出的模型是 Z-up，需要旋转到 Y-up
+  // 修正朝向（例如 Z-up 旋转到 Y-up）
   if (options.rotateX) model.rotation.x = options.rotateX;
+  // 如有需要可添加 rotateY, rotateZ
   model.updateMatrixWorld(true);
 
-  // 计算边界框（缩放+旋转后）并居中
+  // 计算变换后的包围盒
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
+  const minY = box.min.y;
 
+  // 用户传入的位置（默认 [0,0,0]）
   const pos = options.position ?? [0, 0, 0];
-  model.position.set(pos[0] - center.x, pos[1] - center.y, pos[2] - center.z);
+  // 是否自动对齐地面（默认 true）
+  const autoAlignGround = options.autoAlignGround !== undefined ? options.autoAlignGround : true;
 
-  // 添加标签
+  let yOffset;
+  if (autoAlignGround) {
+    // 底座对齐到 pos[1] 高度（通常为0）
+    yOffset = pos[1] - minY;
+  } else {
+    // 原居中逻辑：模型中心对齐到 pos[1]
+    yOffset = pos[1] - center.y;
+  }
+  // 设置位置（x, z 保持中心对齐，y 取决于对齐模式）
+  model.position.set(pos[0] - center.x, yOffset, pos[2] - center.z);
+
+  // 添加标签（CSS2DObject）
   if (options.label) {
     const div = document.createElement("div");
     div.textContent = options.label;
@@ -93,7 +108,9 @@ export async function loadGLTFModel(scene, url, options = {}) {
     div.style.borderRadius = "12px";
     div.style.border = "1px solid #00aaff";
     const labelObj = new CSS2DObject(div);
-    labelObj.position.set(0, options.labelOffset ?? size.y / 2 + 0.5, 0);
+    // 标签偏移：默认在模型顶部上方 0.5 单位，可由 labelOffset 覆盖
+    const labelOffset = options.labelOffset ?? (size.y / 2 + 0.5);
+    labelObj.position.set(0, 0, labelOffset);
     model.add(labelObj);
   }
 
