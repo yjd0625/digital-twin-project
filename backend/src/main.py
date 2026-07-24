@@ -1,5 +1,6 @@
 """主入口：FastAPI 应用，承载 WebSocket(/ws) + REST，并驱动 PlantSimulation TCP 数据"""
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -29,25 +30,58 @@ handler = WebSocketHandler(plant)
 processor = DataProcessor()
 
 
+# 复用解码器：从字符串头部解析"第一个完整的 JSON 值"，并返回其结束位置
+# 这样即使一条 JSON 跨多个 TCP 包到达、或被拆成多段，也能正确重组
+_json_decoder = json.JSONDecoder()
+
+
 async def plant_read_loop() -> None:
-    """后台任务：持续从 PlantSimulation 读取并广播给前端（断线自动重连）"""
+    """后台任务：持续从 PlantSimulation 读取并广播给前端（断线自动重连）
+
+    TCP 是字节流协议，PlantSimulation 发来的 JSON 可能跨多个 recv 分包到达。
+    这里把接收到的字节累积进 byte_buffer，再用 raw_decode 从头部逐条提取
+    完整的 JSON 对象（无论中间是否含换行、跨几个包），提取到就广播，
+    剩下的字节继续等待后续数据，从而彻底解决"分段导致 JSON 被截断"的问题。
+    """
     loop = asyncio.get_running_loop()
+    byte_buffer = b""
     while True:
         try:
             if not plant.is_connected:
                 try:
                     plant.connect()
+                    byte_buffer = b""   # 重连后清空，避免旧数据混入新会话
                 except OSError:
                     logger.warning("PlantSimulation 未连接，3s 后重试...")
                     await asyncio.sleep(3)
                     continue
             raw = await loop.run_in_executor(None, plant.recv, PLANT_BUFFER_SIZE)
-            text = raw.decode(DATA_ENCODING).strip()
-            if not text:
+            if not raw:
+                # recv 返回空 bytes = 对端已关闭连接
+                logger.warning("PlantSimulation 连接已关闭，尝试重连...")
+                plant.close()
+                byte_buffer = b""
                 continue
-            logger.info("Received from Plant: %s", text)
-            parsed = processor.parse(text)
-            await handler.broadcast(parsed)
+            byte_buffer += raw
+            # 从缓冲字节中尽可能多地解析出完整 JSON 对象
+            while True:
+                try:
+                    text = byte_buffer.decode(DATA_ENCODING)
+                except UnicodeDecodeError:
+                    break  # 多字节字符被截断，等更多数据再试
+                if not text.strip():
+                    byte_buffer = b""
+                    break
+                try:
+                    obj, end = _json_decoder.raw_decode(text)
+                except ValueError:
+                    break  # 片段不完整，等待更多数据
+                # 按字节对齐消费已解析的前缀（raw_decode 返回的 end 是字符索引）
+                consumed = text[:end].encode(DATA_ENCODING)
+                byte_buffer = byte_buffer[len(consumed):]
+                logger.info("Received from Plant: %s", text[:end])
+                parsed = processor.parse(text[:end])
+                await handler.broadcast(parsed)
         except asyncio.CancelledError:
             logger.info("Plant read loop cancelled.")
             break
