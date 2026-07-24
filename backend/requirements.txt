@@ -4,6 +4,8 @@ fastapi~=0.110.0
 uvicorn[standard]~=0.29.0
 # 消息总线：Redis Pub/Sub（需 >=4.2 才有 redis.asyncio）；老版 Redis 服务端用 RESP2 兼容
 redis>=4.2
+# 时序数据库：InfluxDB 3 Core 专用客户端（注意导入名是 influxdb_client_3，由本包提供）
+influxdb3-python
 
 # 开发 / 测试
 pytest~=8.0

@@ -1,51 +1,33 @@
-# Python
+# ===== 环境变量（含令牌，禁止入库）=====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
 __pycache__/
 *.pyc
 *.pyo
-*.egg-info/
-dist/
-build/
-*.egg
-*.whl
+.pytest_cache/
 
-# 虚拟环境
-venv/
-.venv/
-env/
-
-# Node
+# ===== Node / Vite =====
 node_modules/
+dist/
 
-# IDE
+# ===== 本地日志 =====
+backend/logs/
+
+# ===== 编辑器 / 系统 =====
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Logs
-*.log
-logs/
-
-# Backend
-backend/.env
-
-# Frontend (Vite build)
-frontend/dist/
-
-# Simulation backup
-simulation/models/backup/
-simulation/models/*.bak
-frontend/src/.history/
-
+# ===== 本地编辑历史（VS Code Local History，数百个快照，禁止入库）=====
 .history/
 
-# PlantSimulation model files (proprietary, not included in repo)
-*.spp
-*.spp.bak
+# ===== 个人启动脚本（用户明确"暂时不上传"，仅本机自用）=====
+scripts/
+backend/scripts/
 
-# Model backup (large CAD originals)
+# ===== 个人 / 备份文件（不入库）=====
+PORTFOLIO_TODO.md
 frontend/public/models/modelBackup/

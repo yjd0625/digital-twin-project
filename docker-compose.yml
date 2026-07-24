@@ -1,0 +1,138 @@
+# 数字孪生全栈 Docker 编排
+# 用法（在本文件所在目录）：
+#   启动： docker compose up -d
+#   看日志：docker compose logs -f <服务名>     例：docker compose logs -f backend
+#   停止： docker compose down                   （加 -v 会删 redis 数据卷）
+# 各服务端口（均映射到宿主，浏览器从宿主 localhost 访问）：
+#   frontend  :8080(容器5173)   backend :8300(/ws)   influxdb3 :18080   explorer :8888   redis :6379
+#   注：宿主 5173/5180 均落在 Windows/WSL2 保留段 5170-5269（excluded port range），Docker 映射报
+#       access forbidden；故前端宿主映射改用 8080（不在任何保留段）。容器内仍是 5173，HMR/WS 不受影响。
+# 说明：前端是浏览器应用，连 ws://localhost:8300/ws；后端把 8300 发布到宿主，故代码无需改。
+#      后端连 PlantSimulation 走 host.docker.internal:30000，要求 PlantSim 监听 0.0.0.0（非仅 127.0.0.1）。
+
+name: digital-twin
+
+services:
+  # ---------- 消息总线 ----------
+  redis:
+    image: redis:7
+    container_name: dt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dt-net
+    restart: unless-stopped
+
+  # ---------- 时序数据库 ----------
+  influxdb3:
+    image: influxdb:3-core
+    container_name: dt-influxdb3
+    ports:
+      - "18080:18080"
+    environment:
+      # 固定管理员令牌，与现有 token.txt 一致 → Explorer 现有配置直接可用
+      INFLUXDB3_AUTH_TOKEN: ${INFLUXDB3_AUTH_TOKEN}
+    command:
+      - influxdb3
+      - serve
+      - --node-id=${NODE_ID}
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3/data
+      - --plugin-dir=/var/lib/influxdb3/plugins
+      - --http-bind=0.0.0.0:18080
+    volumes:
+      # 复用现有数据目录（测试数据都在这里），不丢
+      - D:/influxdb3/docker-data:/var/lib/influxdb3/data
+      - D:/influxdb3/plugins:/var/lib/influxdb3/plugins
+    networks:
+      - dt-net
+    restart: unless-stopped
+
+  # ---------- InfluxDB 管理 UI ----------
+  explorer:
+    image: influxdata/influxdb3-ui:1.9.0
+    container_name: dt-explorer
+    ports:
+      - "8888:8080"
+    environment:
+      SESSION_SECRET_KEY: ${EXPLORER_SESSION_SECRET_KEY}
+      DEFAULT_API_TOKEN: ${INFLUXDB3_AUTH_TOKEN}
+      # 经宿主网关访问 InfluxDB（与现有 config.json 一致）
+      DEFAULT_INFLUX_SERVER: http://host.docker.internal:18080
+      DEFAULT_SERVER_NAME: Local InfluxDB 3
+      DEFAULT_INFLUX_DATABASE: ""
+    command: ["--mode=admin"]
+    volumes:
+      - D:/influxdb3/explorer/config:/app-root/config:ro
+      - D:/influxdb3/explorer/db:/db:rw
+    depends_on:
+      - influxdb3
+    networks:
+      - dt-net
+    restart: unless-stopped
+
+  # ---------- Python 后端（FastAPI）----------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dt-backend
+    ports:
+      - "8300:8300"
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 8300
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PROTOCOL: 2
+      # 连宿主上的 PlantSimulation（需 PlantSim 监听 0.0.0.0）
+      PLANT_HOST: host.docker.internal
+      PLANT_PORT: 30000
+      INFLUXDB_ENABLED: ${INFLUXDB_ENABLED:-false}
+      INFLUXDB_URL: http://influxdb3:18080
+      INFLUXDB_TOKEN: ${INFLUXDB3_AUTH_TOKEN}
+      INFLUXDB_DATABASE: digital_twin
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # 挂载源码实现热重载（依赖已装在镜像内）
+      - ./backend/src:/app/src
+    depends_on:
+      - redis
+      - influxdb3
+    networks:
+      - dt-net
+    restart: unless-stopped
+
+  # ---------- Vite 前端（开发模式 + HMR）----------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dt-frontend
+    ports:
+      # 宿主 8080 绕开 Windows/WSL2 的排除端口范围（5173/5180 都在保留段 5170-5269 内）
+      - "8080:5173"
+    environment:
+      # 容器内监听bind挂载的文件需轮询
+      CHOKIDAR_USEPOLLING: "1"
+      CHOKIDAR_INTERVAL: "100"
+    volumes:
+      # 仅挂载源码与配置，node_modules 保留在镜像内
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+    depends_on:
+      - backend
+    networks:
+      - dt-net
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+
+networks:
+  dt-net:
+    driver: bridge

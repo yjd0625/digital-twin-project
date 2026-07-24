@@ -85,6 +85,23 @@ python -m src.main
 - 依赖：`fastapi` / `uvicorn` / `redis` / `websockets`（见 `requirements.txt`）。
 - Redis 未运行时后端仍可启动（启动期容错），但数据无法经总线流转；请保证 Redis 已就绪。
 
+#### 启用 InfluxDB 时序写入（可选）
+
+后端默认**不**写库（`INFLUXDB_ENABLED=false`）。要启用，设置环境变量后启动后端：
+
+```bash
+# backend 目录下，启动前设置（Windows cmd）
+set INFLUXDB_ENABLED=true
+# 若 InfluxDB 3 设了鉴权，提供令牌（建议走环境变量 / .env，勿硬编码进仓库）
+set INFLUXDB_TOKEN=apiv3_xxxxxxxx
+python -m src.main
+```
+
+- 写入为 best-effort：写库失败仅记日志，不影响实时孪生流。
+- 建库（首次）：`influxdb3 create database digital_twin`；measurement 首写自动创建，无需预建表。
+- 验证：浏览器开 `http://localhost:8300/status`，看 `influxdb.write_count` 是否增长、`last_error` 是否为 null；或直接到 Explorer 查 `SELECT * FROM station_state`。
+- 也可不启动后端，单独跑 `python scripts/test_influx_write.py` 验证写入链路（用内置样例数据）。
+
 ### 5. 前端（Vite，必选）
 
 ```bash
@@ -162,6 +179,14 @@ PlantSimulation
 ```
 
 简化：`PlantSimulation → (TCP:30000) → 后端 →【Redis 总线】→ (WebSocket:8300) → 前端`
+
+后端采集端解析到 `state` / `action` 时，还会**旁路写入 InfluxDB 3**（measurement 分别为 `station_state` / `station_action`，best-effort，不阻塞主流程）：
+
+```
+后端采集端  ──parsed state──▶  station_state   ┐
+             ──parsed action─▶  station_action  ├─▶ InfluxDB 3 Core (:18080) ─▶ Explorer (:8888)
+             （time=接收时刻, simulationTime=仿真时刻, 只写出现的维度）
+```
 
 ## 技术栈
 

@@ -29,13 +29,14 @@
 3. 后端分发端订阅 `plant/state`，通过 WebSocket (ws://localhost:8300/ws) 广播给所有已连接的前端
 4. 前端 Three.js 场景根据接收到的数据驱动 3D 对象状态
 5. 用户通过前端按钮 / POST /command 发送指令 → publish 到 `plant/command` → 后端订阅后通过 TCP Socket 下发 PlantSimulation
+6. （可选）后端采集端解析到 `type=state` / `type=action` 时，旁路写入 InfluxDB 3：`station_state`（每帧快照）、`station_action`（动作事件），best-effort，不阻塞实时流。字段映射见 `docs/api.md`「时序数据库写入」一节。 → publish 到 `plant/command` → 后端订阅后通过 TCP Socket 下发 PlantSimulation
 
 ## 技术栈
 
 | 层 | 技术 |
 |-----|------|
 | 仿真 | PlantSimulation (SimTalk) |
-| 后端 | Python + FastAPI + redis + websockets |
+| 后端 | Python + FastAPI + redis + websockets + influxdb3-python（InfluxDB 3 旁路写入） |
 | 前端 | Three.js + Vite |
 | 通信 | TCP Socket (仿真<->后端), WebSocket (后端<->前端), Redis Pub/Sub (后端<->后端, 解耦) |
-| 消息总线 | Redis Pub/Sub（Docker 容器 `redis-twin:6379`，或本机原生 `E:\Redis\redis-server.exe:6379`；主题 plant/state、plant/command） |
+| 消息总线 | Redis Pub/Sub（统一用 Docker 容器 `redis-twin:6379`；Windows 原生 Redis 支持差，不推荐；主题 plant/state、plant/command） |

@@ -9,12 +9,7 @@ class DataProcessor:
 
     @staticmethod
     def parse(raw: str) -> dict:
-        """解析 PlantSimulation 发来的字符串，返回结构化字典
-        格式示例: "machine_01,TEMP,85.2" 或 JSON 字符串
-
-        容错：PlantSimulation 常把 JSON 当作字符串再发一次（双重编码），
-        此时 json.loads 会得到 str 而非 dict，这里会再解一层，保证返回 dict。
-        """
+        """解析 PlantSimulation 发来的字符串，返回结构化字典"""
         import json
         raw = raw.strip()
         obj = None
@@ -39,6 +34,21 @@ class DataProcessor:
         # 已在 main.py 的 plant_read_loop（字节缓冲 + raw_decode）中统一处理。
         logger.warning("收到非 JSON 数据，原样透传: %s", raw[:200])
         return {"raw": raw}
+
+    @staticmethod
+    def process(data: dict) -> dict:
+        """数据处理占位函数：解析之后、广播前端之前的二次加工环节。
+
+        当前仅原样透传，作为后续业务逻辑的唯一种植点（stub）。
+        后续可在此实现：
+          - 字段映射 / 重命名（与前端约定字段对齐）
+          - 单位换算、精度裁剪
+          - 异常值 / 缺失值清洗与兜底
+          - 设备状态聚合、派生指标计算
+          - 按前端所需结构重组（type 信封分流等）
+        """
+        # TODO: 在此实现具体的数据处理逻辑（占位，暂原样返回）
+        return data
 
     @staticmethod
     def build_telemetry(device: str, metric: str, value: str) -> dict:
