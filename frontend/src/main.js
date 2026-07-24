@@ -129,6 +129,7 @@ function sendCommand(msg) {
 
 // ======================== UI 绑定 ========================
 const ui = setupUI(controls, sendCommand, { onView: importer.setView });
+connectWebSocket();
 
 // ======================== 窗口尺寸自适应 ========================
 window.addEventListener("resize", function() {
