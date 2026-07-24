@@ -77,7 +77,7 @@ async function loadAllModels() {
 
     for (let i = 0; i < cfg.count; i++) {
       const startTime = performance.now();
-      const lbl = cfg.count > 1 ? cfg.label + " #" + (i + 1) : cfg.label;
+      const lbl = cfg.label + " #" + (i + 1);
       const model = createInstanceFromTemplate(template, {
         label: lbl,
         // rotateX: -Math.PI / 2,
@@ -130,7 +130,7 @@ function connectWebSocket() {
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
   ws.onmessage = function(event) {
-  try { const data = JSON.parse(event.data); dataHandler.process(data); }
+  try { const data = JSON.parse(event.data); if (dataHandler) dataHandler.process(data); }    //加载完成前不处理数据
   catch(e) { console.error(e); }
   };
   ws.onclose = function() {
@@ -165,22 +165,21 @@ const importerCtx = { scene, camera, controls, allModelInstances };
 const importer = initImporter(importerCtx);
 
 const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: importer.resetPositions, onToggleLabels: toggleLabels });
-
-const dataHandler = new DataHandler({
-  allModelInstances: allModelInstances,
-  updateInfo: ui.updateInfo
-});
+let dataHandler = null;
 
 connectWebSocket();
-
-// ======================== 初始化其他模块 ========================
-const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
-const interaction = initInteraction(ctx, importer, outlinePass);
 
 // ======================== 加载模型并恢复持久化数据 ========================
 loadAllModels()
   .then(async function(instances) {
+    dataHandler = new DataHandler({
+      allModelInstances: instances,
+      updateInfo: ui.updateInfo
+    });
     dataHandler.objects.cube = instances[0];
+    const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
+    const interaction = initInteraction(ctx, importer, outlinePass);
+
     const allBox = new THREE.Box3().setFromObject(scene);
     const size = allBox.getSize(new THREE.Vector3());
     const center = allBox.getCenter(new THREE.Vector3());

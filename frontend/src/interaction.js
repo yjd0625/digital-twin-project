@@ -173,12 +173,16 @@ export function initInteraction(ctx, importer, outlinePass) {
       let dz = pt.z - selectedObjects[0].position.z;
       selectedObjects.forEach(function(o) { o.position.x += dx; o.position.z += dz; });
       updateSelectionBoxes();
-      importer.savePositions();
+      // 拖动中只更新显示，不写 localStorage；保存推迟到 pointerup（见 _pu2）
     }
   });
 
   document.addEventListener("pointerup", function _pu2() {
-    if (isDragging) { isDragging = false; controls.enabled = true; }
+    if (isDragging) {
+      isDragging = false;
+      controls.enabled = true;
+      importer.savePositions(); // 拖拽结束后保存一次，避免拖动过程中频繁写 localStorage
+    }
   });
 
   // ======================== 返回公共接口 ========================
