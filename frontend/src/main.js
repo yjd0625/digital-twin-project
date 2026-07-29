@@ -6,6 +6,7 @@ import { setupUI } from "./ui.js";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { initInteraction } from "./interaction.js";
 import { initImporter } from "./importer.js";
+import { initHistoryPanel } from "./history_panel.js";
 
 // ======================== 场景初始化 ========================
 console.clear();  // 清空控制台
@@ -263,6 +264,15 @@ loadAllModels()
     dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位
     const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
     interaction = initInteraction(ctx, importer, outlinePass);
+
+    // 历史数据面板（从后端 /api/history 读 InfluxDB 时序，零依赖 SVG 折线图）
+    initHistoryPanel({
+      apiBase: `http://${window.location.hostname}:8300`,
+      getDevices: () => allModelInstances.map((m) => ({
+        id: m.userData.id,
+        parts: Object.keys(m.userData.parts || {}),
+      })),
+    });
 
     const allBox = new THREE.Box3().setFromObject(scene);
     const size = allBox.getSize(new THREE.Vector3());

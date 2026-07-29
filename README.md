@@ -227,6 +227,62 @@ python -m connectors.sources.python_realtime
 
 ---
 
+## 演示数据源（无需 PlantSimulation）
+
+默认数据源是随仓库的 **Python 实时仿真器**（`connectors/sources/python_realtime.py`），纯标准库实现，**不依赖任何商业软件**，clone 后即可让 3D 场景动起来。它作为 TCP 服务端监听 `0.0.0.0:30000`，后端（TCP 客户端）连上来后持续推送 `state` / `action` 信封。
+
+### 运行（二选一，取决于启动方式）
+
+**方式一（Docker 后端）：** 在**宿主机**起仿真器，容器后端经 `host.docker.internal:30000` 自动连上：
+
+```bash
+# 终端 A：宿主机起仿真器
+python -m connectors.sources.python_realtime --host 0.0.0.0 --port 30000
+
+# 终端 B：起整套（后端在容器内，会去连宿主 :30000）
+docker compose up -d
+```
+
+**方式二（原生后端）：** 后端连 `127.0.0.1:30000`，先起仿真器再起后端即可：
+
+```bash
+python -m connectors.sources.python_realtime      # 默认 0.0.0.0:30000
+# 另开终端：cd backend && python -m src.main
+```
+
+### 参数
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--host` | `0.0.0.0` | TCP 监听地址 |
+| `--port` | `30000` | TCP 监听端口 |
+| `--hz` | `20` | `state` 推送频率（Hz） |
+| `--dry-run` | 关闭 | 不联网，仅打印前几帧用于自检 |
+
+### 自检
+
+不依赖后端/前端，先确认帧格式正确：
+
+```bash
+python -m connectors.sources.python_realtime --dry-run
+```
+
+应输出一串 `state` 帧 JSON（含 `组装工位 #1`、`搬运机器人 #1`、`焊接悬挂机器人 #1` 等），每 80 帧穿插一条 `action` 帧（驱动 `组装工位 #1` 的 `LeftSlide` 零件位移动画）。
+
+> 该仿真器驱动前端 `loadAllModels()` 预载的默认场景（组装工位 / 搬运机器人 / 焊接机器人 / 缓冲区），**无需任何前端改动**。若想接真实 PlantSimulation，把它当作只读分析外挂（订阅 `source/state`），或按 `connectors/base.py` 的协议自行实现一个数据源连接器。
+
+### 查看历史数据（InfluxDB 面板）
+
+后端会把 `state`/`action` **旁路写入 InfluxDB 3**（best-effort）。前端工具栏「历史数据」按钮打开一个侧边面板，可逐设备/零件/字段回看时序曲线（零依赖 SVG 折线图，设备与零件下拉直接读 3D 场景，避免 id 漂移）。
+
+- **前置条件**：必须开启 `INFLUXDB_ENABLED=true`（默认 `false`，仅写库、不影响实时孪生流），且演示数据源在跑（否则 InfluxDB 里无 `station_state` 可查）。
+- **用法**：打开面板 → 选设备（如 `组装工位 #1`）→ 选零件（如 `Clamp`）→ 选字段（如 `temp`）→ 选时间范围（15m/1h/6h/24h/7d）→ 刷新（或勾选「自动」每 10s 拉取）。
+- **后端接口**：`GET /api/history?device=...&part=...&field=...&range=...`（未启用返回 503，查询异常返回 502）。详见 `docs/api.md`。
+
+> 未启用 InfluxDB 时面板会提示「InfluxDB 未启用」，属正常；实时 3D 不受影响。
+
+---
+
 ## 端口总览
 
 | 组件 | 方式一 Docker 宿主端口 | 方式二 原生命令行端口 | 说明 |

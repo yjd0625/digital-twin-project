@@ -1,10 +1,28 @@
 (*
-  描述: 向 Python 后端发送仿真数据
-  格式: 设备名,指标,数值
+  描述: 向 Python 后端发送仿真数据（state 信封，与数字孪生协议一致）
+  协议: 后端是 TCP 客户端、本脚本作为 TCP 服务端先 accept 连接；
+        信封为 JSON，多个帧**直接拼接、不带换行/分隔符**（UTF-8），
+        后端用 raw_decode 顺序解析，前导空白会导致解析失败。
+        type ∈ {create, state, action, reset, attach, detach}
+        完整 schema 见 docs/api.md / docs/CONNECTOR.md
 *)
 
 var soc : object
 soc := Socket.Create
+-- 建议先 soc.SocketListen(port) 并 soc.Accept 等待后端连接（后端为客户端）
 
--- 简写发送一行数据
-soc.SendLine( "machine_01,TEMP," + num_to_str( ?.getStatNumIn(1) ) )
+-- 构造一个 state 信封（示例：组装工位 #1 的温度与状态）
+local frame : string
+frame := "{"
+frame := frame + "\"type\":\"state\","
+frame := frame + "\"simulationTime\":" + num_to_str(?.simTime, 3) + ","
+frame := frame + "\"simulateSpeed\":1,"
+frame := frame + "\"stations\":["
+frame := frame + "{\"id\":\"组装工位 #1\",\"status\":\"running\","
+frame := frame + "\"temp\":" + num_to_str(?.getStatNumIn(1), 2)
+frame := frame + "}"
+frame := frame + "]"
+frame := "}"
+
+-- 注意：用 Send（不加换行）而非 SendLine，避免帧间出现 CRLF 被后端当成前导空白
+soc.Send( frame )

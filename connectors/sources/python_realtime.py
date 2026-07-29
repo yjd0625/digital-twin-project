@@ -9,7 +9,6 @@
 
 运行：
     python -m connectors.sources.python_realtime
-    （或兼容入口 python scripts/demo_simulator.py）
 参数：
     --host/--port  TCP 监听地址（默认 0.0.0.0:30000，后端作为客户端连上来）
     --hz           推送帧率（默认 20）

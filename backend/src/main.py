@@ -5,7 +5,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -20,6 +21,7 @@ from .websocket_handler import WebSocketHandler
 from .data_processor import DataProcessor
 from .bus import create_bus
 from .influx_writer import InfluxWriter
+from .influx_query import query_history
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +174,40 @@ app.add_middleware(
 async def ws_endpoint(websocket: WebSocket):
     """前端实时通道：把 source/state 经总线收到的消息广播给前端（实时环单向，无控制指令回写）"""
     await handler.handle_client(websocket)
+
+
+@app.get("/api/history", tags=["数据"], summary="查询设备历史时序（来自 InfluxDB）")
+async def api_history(
+    device: str = Query(..., description="设备 station_id，如 '组装工位 #1'"),
+    part: str = Query("Clamp", description="零件名，如 Clamp / Z1"),
+    field: str = Query("temp", description="字段，见 influx_query.ALLOWED_FIELDS"),
+    range_: str = Query("1h", alias="range", description="时间范围: 15m/1h/6h/24h/7d"),
+):
+    """从 InfluxDB 读取某设备某零件某字段的历史序列，供前端历史面板绘图。
+
+    依赖 INFLUXDB_ENABLED=true 且 client 已连接（否则 503）；查询异常 502。
+    """
+    if not INFLUXDB_ENABLED:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "InfluxDB 未启用（后端需 INFLUXDB_ENABLED=true）"},
+        )
+    points, err = query_history(
+        influx_writer, device=device, part=part, field=field, range_=range_
+    )
+    if err:
+        return JSONResponse(
+            status_code=502,
+            content={"error": err, "last_error": influx_writer.last_error},
+        )
+    return {
+        "device": device,
+        "part": part,
+        "field": field,
+        "range": range_,
+        "points": points,
+        "count": len(points),
+    }
 
 
 @app.get("/health", tags=["运维"], summary="健康检查")

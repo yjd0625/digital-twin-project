@@ -52,7 +52,40 @@
 |------|------|------|
 | GET | /health | 健康检查：`{"status":"ok","source_connected":bool}` |
 | GET | /status | 运行状态：前端连接数 + 数据源(source) / 总线连接状态 + InfluxDB 写入统计（enabled/connected/write_count/last_error） |
+| GET | /api/history | 历史时序查询（见下方）；依赖 `INFLUXDB_ENABLED=true`，否则 503 |
 | WS | /ws | 前端实时通道（见上方 WebSocket 接口） |
+
+### 历史时序查询 `GET /api/history`
+
+从 InfluxDB 3 读取某设备某零件某字段的历史序列，供前端「历史数据」面板绘图。
+
+**查询参数**
+
+| 参数 | 必填 | 默认 | 说明 |
+|------|------|------|------|
+| `device` | 是 | — | 设备 `station_id`（如 `组装工位 #1`） |
+| `part` | 否 | `Clamp` | 零件名（如 `Clamp` / `Z1`） |
+| `field` | 否 | `temp` | 字段，限白名单：`temp` / `pos_x..z` / `rot_x..z` / `scale_x..z` / `simulationTime` / `simulate_speed` / `received_at` |
+| `range` | 否 | `1h` | 时间范围：`15m` / `1h` / `6h` / `24h` / `7d` |
+
+**返回**
+
+```json
+{
+  "device": "组装工位 #1",
+  "part": "Clamp",
+  "field": "temp",
+  "range": "1h",
+  "points": [ { "time": "2026-07-28T09:00:00+00:00", "value": 32.1 } ],
+  "count": 1
+}
+```
+
+- `INFLUXDB_ENABLED=false` → `503 {"error":"InfluxDB 未启用（后端需 INFLUXDB_ENABLED=true）"}`
+- 查询异常 → `502 {"error":..., "last_error":...}`
+- 数据前提：需 `INFLUXDB_ENABLED=true` 且演示数据源在跑，InfluxDB 里才有 `station_state` 可查（旁路 best-effort 写入）。
+
+**前端入口**：工具栏「历史数据」按钮 → `frontend/src/history_panel.js`（零依赖 SVG 折线图，设备/零件下拉直接读 3D 场景加载的模型，避免 `station_id` 漂移）。
 
 ## TCP Socket（数据源通信）
 

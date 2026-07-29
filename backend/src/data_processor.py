@@ -49,13 +49,3 @@ class DataProcessor:
         """
         # TODO: 在此实现具体的数据处理逻辑（占位，暂原样返回）
         return data
-
-    @staticmethod
-    def build_telemetry(device: str, metric: str, value: str) -> dict:
-        """组装标准遥测消息格式"""
-        return {
-            "type": "telemetry",
-            "device": device,
-            "metric": metric,
-            "value": value,
-        }
