@@ -1,0 +1,3 @@
+# connectors 独立运行所需依赖（不污染后端 requirements.txt）
+# 仅 connectors/sources/mqtt_source.py 与 connectors/examples/publish_demo.py 需要
+paho-mqtt>=2.0.0

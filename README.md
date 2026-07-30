@@ -281,6 +281,49 @@ python -m connectors.sources.python_realtime --dry-run
 
 > 未启用 InfluxDB 时面板会提示「InfluxDB 未启用」，属正常；实时 3D 不受影响。
 
+### 接入真实工业数据源（MQTT）
+
+除了内置仿真器，本项目还提供 **MQTT 数据源连接器**（`connectors/sources/mqtt_source.py`），证明「后端只认协议、不挑数据源」——同一个后端既能接 TCP 直推的仿真器，也能接 MQTT 桥接器，**后端零改动**。
+
+链路：`MQTT broker → 连接器(订阅) → TCP :30000 → 后端(FastAPI) → Redis/WS → 前端`。
+
+**前置依赖**（仅连接器需要，不污染后端）：
+
+```bash
+pip install -r connectors/requirements.txt   # 仅 paho-mqtt
+```
+
+**运行：**
+
+```bash
+# 终端 A：起 MQTT 连接器（订阅 broker，经 TCP 转发给后端）
+python -m connectors.sources.mqtt_source --broker test.mosquitto.org --topic digital-twin/source
+
+# 终端 B：起整套（后端连 :30000，效果与仿真器完全一致——前端 3D 动起来）
+docker compose up -d
+```
+
+可用任意 MQTT broker：公共测试 `test.mosquitto.org`、本地 `mosquitto` / `emqx`，或工厂内网 broker。**同一主题下推送符合平台协议的 `state` / `action` 信封即可**。例如用随附的发布端演示：
+
+```bash
+# 终端 C：发测试数据（state 每 0.1s，action 每 4s）
+python -m connectors.examples.publish_demo --broker test.mosquitto.org --topic digital-twin/source
+```
+
+**参数：**
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--broker` | `test.mosquitto.org` | MQTT broker 地址 |
+| `--mqtt-port` | `1883` | MQTT broker 端口 |
+| `--topic` | `digital-twin/source` | 订阅主题 |
+| `--username` / `--password` | 空 | MQTT 认证（可选） |
+| `--client-id` | 随机 | MQTT client id（可选） |
+| `--host` / `--port` | `0.0.0.0:30000` | 对后端暴露的 TCP 地址 |
+| `--dry-run` | 关闭 | 不连 MQTT/TCP，仅验证信封解析（单帧 / 拼接帧 / 非法 JSON 均正确处理） |
+
+**协议要点**：连接器对收到的 MQTT 载荷做 JSON 校验，`type ∈ {create,state,action,reset,attach,detach}` 才入队转发；支持「无分隔符、多帧拼接」的载荷（与平台 TCP 帧约定一致）；非 JSON 或未知 `type` 会被忽略并打印提示。后端下发的指令通道（预测 / 推演回写）暂不消费，仅占位。
+
 ---
 
 ## 端口总览
