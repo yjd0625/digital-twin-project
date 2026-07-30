@@ -186,5 +186,11 @@ export function initInteraction(ctx, importer, outlinePass) {
   });
 
   // ======================== 返回公共接口 ========================
-  return { selectObject, deselectAll, updateSelectionBoxes };
+  return {
+    selectObject,
+    deselectAll,
+    updateSelectionBoxes,
+    /** 返回当前首个选中模型的 id（无选中返回 null），供历史面板「绑定选中设备」使用 */
+    getSelectedId: () => (selectedObjects.length ? selectedObjects[0].userData.id : null),
+  };
 }

@@ -195,6 +195,26 @@ python -m src.main
 - 建库（首次）：`influxdb3 create database digital_twin`；measurement 首写自动创建，无需预建表。
 - 验证：浏览器开 `http://localhost:8300/status`，看 `influxdb.write_count` 是否增长、`last_error` 是否为 null；或直接到 Explorer 查 `SELECT * FROM station_state`。
 
+#### 后端 WebSocket 可选鉴权（默认关闭）
+
+`/ws` 端点默认**不校验**，开放 demo 直接可连。若部署到公网想加一层防护，设环境变量后重启后端：
+
+```bash
+set WS_TOKEN=my-secret-token
+python -m src.main
+```
+
+启用后，前端或任意 WS 客户端需带令牌连接，否则服务端直接关闭（1008）：
+
+```
+ws://localhost:8300/ws?token=my-secret-token
+# 或请求头 Authorization: Bearer my-secret-token
+```
+
+> 仅后端校验，**前端无需改动**（默认仍不传 token，保持开源 clone 即跑）。数据源 TCP 连接与 WS 鉴权互不干扰。
+
+> 健壮性：后端→数据源 TCP 连接采用**指数退避重连**（3s→6s→12s→…封顶 30s，带抖动）并开启 TCP keepalive 探测死链；前端 WS 断线后同样**指数退避重连**并每 15s 发心跳 `ping`。
+
 #### 5. 前端（Vite，必选）
 
 ```bash
@@ -271,12 +291,14 @@ python -m connectors.sources.python_realtime --dry-run
 
 > 该仿真器驱动前端 `loadAllModels()` 预载的默认场景（组装工位 / 搬运机器人 / 焊接机器人 / 缓冲区），**无需任何前端改动**。若想接真实 PlantSimulation，把它当作只读分析外挂（订阅 `source/state`），或按 `connectors/base.py` 的协议自行实现一个数据源连接器。
 
-### 查看历史数据（InfluxDB 面板）
+### 查看历史数据 · 场景绑定看板（InfluxDB）
 
-后端会把 `state`/`action` **旁路写入 InfluxDB 3**（best-effort）。前端工具栏「历史数据」按钮打开一个侧边面板，可逐设备/零件/字段回看时序曲线（零依赖 SVG 折线图，设备与零件下拉直接读 3D 场景，避免 id 漂移）。
+后端会把 `state`/`action` **旁路写入 InfluxDB 3**（best-effort）。前端工具栏「历史数据」按钮打开侧边看板，数据**绑定到具体孪生体**（设备/零件来自 3D 场景，避免 id 漂移），对标中台「场景绑定报表」概念但零重依赖。
 
 - **前置条件**：必须开启 `INFLUXDB_ENABLED=true`（默认 `false`，仅写库、不影响实时孪生流），且演示数据源在跑（否则 InfluxDB 里无 `station_state` 可查）。
-- **用法**：打开面板 → 选设备（如 `组装工位 #1`）→ 选零件（如 `Clamp`）→ 选字段（如 `temp`）→ 选时间范围（15m/1h/6h/24h/7d）→ 刷新（或勾选「自动」每 10s 拉取）。
+- **聚焦查询**：选设备（如 `组装工位 #1`）→ 选零件（如 `Clamp`）→ 选字段（如 `temp`）→ 选时间范围（15m/1h/6h/24h/7d）→ 刷新（或勾选「自动」每 10s 拉取）。
+- **📌 绑定选中设备**：在 3D 场景里点选一个模型，再点此按钮，自动把选中孪生体 id 填入设备下拉——直观展示「面板数据 ← 具体孪生体」。
+- **＋ 加入看板**：把当前选择快照成一张卡片，看板区可并排多张（如某设备 `temp` + `pos_x` 同屏），每张卡片独立拉取 + 独立 SVG 图，适合对比多孪生体/多指标。
 - **后端接口**：`GET /api/history?device=...&part=...&field=...&range=...`（未启用返回 503，查询异常返回 502）。详见 `docs/api.md`。
 
 > 未启用 InfluxDB 时面板会提示「InfluxDB 未启用」，属正常；实时 3D 不受影响。

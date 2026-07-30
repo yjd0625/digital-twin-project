@@ -13,6 +13,9 @@ HTTP_HOST = os.getenv("HTTP_HOST", "0.0.0.0")
 HTTP_PORT = int(os.getenv("HTTP_PORT", "8300"))
 # 前端 WebSocket 路由路径；浏览器连接串为 ws://<HTTP_HOST>:<HTTP_PORT><WS_PATH>
 WS_PATH = os.getenv("WS_PATH", "/ws")
+# WebSocket 可选鉴权：非空时才校验。前端连接需带 ?token=<WS_TOKEN> 或
+# Authorization: Bearer <WS_TOKEN>；留空（默认）则不校验，保持开放 demo 可用。
+WS_TOKEN = os.getenv("WS_TOKEN", "")
 
 # === 消息总线（Redis Pub/Sub，解耦数据源与前端，为将来切 MQTT 铺路）===
 # BUS_TYPE 预留切换位：现在用 "redis"，将来实现 MqttBus 后改成 "mqtt" 即可，

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from .config import (WS_PATH, HTTP_HOST, HTTP_PORT, SOURCE_BUFFER_SIZE,
+from .config import (WS_PATH, WS_TOKEN, HTTP_HOST, HTTP_PORT, SOURCE_BUFFER_SIZE,
                      DATA_ENCODING, LOG_LEVEL, LOG_FILE,
                      TOPIC_SOURCE_STATE,
                      INFLUXDB_ENABLED, INFLUXDB_URL, INFLUXDB_TOKEN,
@@ -52,10 +52,12 @@ async def source_read_loop() -> None:
             if not source.is_connected:
                 try:
                     source.connect()
+                    source.reset_backoff()   # 连接成功 → 重置失败计数
                     byte_buffer = b""   # 重连后清空，避免旧数据混入新会话
                 except OSError:
-                    logger.warning("数据源未连接，3s 后重试...")
-                    await asyncio.sleep(3)
+                    delay = source.next_backoff()  # 指数退避 + 抖动（封顶 30s）
+                    logger.warning("数据源未连接，%.1fs 后重试（第 %d 次）...", delay, source._failures)
+                    await asyncio.sleep(delay)
                     continue
             raw = await loop.run_in_executor(None, source.recv, SOURCE_BUFFER_SIZE)
             if not raw:
@@ -172,7 +174,19 @@ app.add_middleware(
 
 @app.websocket(WS_PATH)
 async def ws_endpoint(websocket: WebSocket):
-    """前端实时通道：把 source/state 经总线收到的消息广播给前端（实时环单向，无控制指令回写）"""
+    """前端实时通道：把 source/state 经总线收到的消息广播给前端（实时环单向，无控制指令回写）
+
+    WebSocket 可选鉴权（WS_TOKEN 非空时启用）：前端连接需带 `?token=<WS_TOKEN>`
+    或 `Authorization: Bearer <WS_TOKEN>`；缺失/错误则直接关闭（1008 策略违规）。
+    留空则不校验，开放 demo 默认可连。
+    """
+    if WS_TOKEN:
+        token = websocket.query_params.get("token") \
+            or websocket.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if token != WS_TOKEN:
+            logger.warning("WS 连接鉴权失败（token 缺失或错误），已拒绝")
+            await websocket.close(code=1008, reason="unauthorized")
+            return
     await handler.handle_client(websocket)
 
 

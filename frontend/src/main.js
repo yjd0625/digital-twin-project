@@ -129,11 +129,24 @@ async function loadAllModels() {
   
 // ======================== WebSocket 数据通信 ========================
 let ws;
+let reconnectAttempts = 0;   // 连续断线次数，用于指数退避
+let wsPingTimer = null;      // 周期心跳定时器
 function connectWebSocket() {
-  ws = new WebSocket("ws://localhost:8300/ws");
-  ws.onopen = function() { ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)"); };
+  // 用当前页面 host 解析后端地址（兼容 dev 与 Docker 发布两种模式）
+  ws = new WebSocket(`ws://${window.location.hostname}:8300/ws`);
+  ws.onopen = function() {
+    reconnectAttempts = 0;   // 连上了 → 重置退避计数
+    // 周期心跳：每 15s 发一次 ping，探测中间链路死连接
+    if (wsPingTimer) clearInterval(wsPingTimer);
+    wsPingTimer = setInterval(function() {
+      try { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); } catch (e) { /* 忽略 */ }
+    }, 15000);
+    ui.updateInfo("\u2713 已连接到数据源", "rgba(0,200,0,0.7)");
+  };
   ws.onmessage = function(event) {
     let data = event.data;
+    // 心跳回应/空帧忽略（后端不会主动回 ping，这里仅防御）
+    if (data === "pong" || data === "ping") return;
     // 防御：若后端误发来双重编码的 JSON 字符串，这里再解析一层
     if (typeof data === "string") {
       try { data = JSON.parse(data); } catch (e) { /* 保持原样，交给 process 判断 */ }
@@ -146,8 +159,12 @@ function connectWebSocket() {
     catch (e) { console.error(e); }
   };
   ws.onclose = function() {
+    if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
     ui.updateInfo("\u26d4 连接断开，正在重连...", "rgba(200,0,0,0.7)");
-    setTimeout(connectWebSocket, 3000);
+    // 指数退避重连：3s → 6s → 12s → 24s → 封顶 30s，叠加随机抖动避免惊群
+    const delay = Math.min(30000, 3000 * Math.pow(2, reconnectAttempts)) + Math.random() * 1000;
+    reconnectAttempts++;
+    setTimeout(connectWebSocket, delay);
   };
   ws.onerror = function(e) { console.error("WS error:", e); };
 }
@@ -272,6 +289,13 @@ loadAllModels()
         id: m.userData.id,
         parts: Object.keys(m.userData.parts || {}),
       })),
+      // 场景绑定看板：读当前 3D 选中的模型，供面板「绑定选中设备」一键填入
+      getSelectedDevice: () => {
+        const id = interaction && interaction.getSelectedId ? interaction.getSelectedId() : null;
+        if (!id) return null;
+        const m = allModelInstances.find((x) => x.userData.id === id);
+        return m ? { id, parts: Object.keys(m.userData.parts || {}) } : null;
+      },
     });
 
     const allBox = new THREE.Box3().setFromObject(scene);

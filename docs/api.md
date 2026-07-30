@@ -57,7 +57,7 @@
 
 ### 历史时序查询 `GET /api/history`
 
-从 InfluxDB 3 读取某设备某零件某字段的历史序列，供前端「历史数据」面板绘图。
+从 InfluxDB 3 读取某设备某零件某字段的历史序列，供前端「场景绑定看板」绘图。看板数据绑定到具体孪生体（设备/零件下拉直接读 3D 场景），支持「绑定选中设备」与多卡片并排对比。
 
 **查询参数**
 
@@ -85,7 +85,7 @@
 - 查询异常 → `502 {"error":..., "last_error":...}`
 - 数据前提：需 `INFLUXDB_ENABLED=true` 且演示数据源在跑，InfluxDB 里才有 `station_state` 可查（旁路 best-effort 写入）。
 
-**前端入口**：工具栏「历史数据」按钮 → `frontend/src/history_panel.js`（零依赖 SVG 折线图，设备/零件下拉直接读 3D 场景加载的模型，避免 `station_id` 漂移）。
+**前端入口**：工具栏「历史数据」按钮 → `frontend/src/history_panel.js`（零依赖 SVG 折线图，设备/零件下拉直接读 3D 场景加载的模型，避免 `station_id` 漂移；支持「📌 绑定选中设备」与「＋ 加入看板」多卡片并排）。
 
 ## TCP Socket（数据源通信）
 
