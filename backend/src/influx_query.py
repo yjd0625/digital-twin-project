@@ -85,8 +85,11 @@ def query_history(writer, device, part="Clamp", field="temp", range_="1h", measu
     dev = str(device).replace("'", "''")
     prt = str(part).replace("'", "''")
     interval = _range_to_interval(range_)
+    # 字段名加双引号：InfluxDB 3 的 SQL（DataFusion）对未加引号的标识符会折叠成小写，
+    # 而库里存的字段保留原始大小写（如 simulationTime），导致 SELECT simulationTime
+    # 变成查 simulationtime 而报 "No field named simulationtime"。加引号后区分大小写即可匹配。
     sql = (
-        f"SELECT time, {field} FROM {meas} "
+        f'SELECT time, "{field}" FROM {meas} '
         f"WHERE station_id = '{dev}' AND part_name = '{prt}' "
         f"AND time >= now() - interval '{interval}' "
         f"ORDER BY time"
