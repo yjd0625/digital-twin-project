@@ -1,4 +1,4 @@
-# Digital Twin 数字孪生系统（数据源中立）
+# Digital Twin 数字孪生系统 · 数据源中立 · 微服务架构
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)
@@ -6,48 +6,20 @@
 ![InfluxDB](https://img.shields.io/badge/InfluxDB-3%20Core-22ADF6?logo=influxdb&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-Frontend-000000?logo=threedotjs&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Data Source](https://img.shields.io/badge/Data%20Source-Python%20Simulator-4B8BBE)
-![Architecture](https://img.shields.io/badge/Architecture-Source%20Neutral%20%2F%20Single%20Direction-8A2BE2)
 
-基于**可插拔数据源**的 3D 数字孪生可视化系统：后端通过 TCP 接入数据源（默认随仓库的 Python 实时仿真器），经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可存入 InfluxDB 3，通过 InfluxDB3 Explorer 查看。
+基于**可插拔数据源**的 3D 数字孪生系统：后端通过 TCP 接入数据源（默认随仓库的 Python 实时仿真器），经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可旁路存入 InfluxDB 3，用 InfluxDB3 Explorer 查看。
 
-> 本仓库是**源码仓库**（前端 + 后端 + 文档）。运行所需的若干组件需你在本机自行安装或准备——详见下方「仓库内含 / 需自准备」对照表。
+> 本仓库是**源码仓库**（前端 + 后端 + 连接器 + 文档）。运行所需组件用 Docker Compose 一键编排，无需在本机装 Python/Node。
 
-## 仓库内含 / 需自准备
+## 特性
 
-### ✅ 随仓库发布（`git clone` 即得）
+- **数据源中立**：后端只认 TCP 协议，仿真器 / MQTT / 任意连接器即插即用，后端零改动。
+- **微服务部署**：`docker-compose` 编排 6 个独立服务，Redis Pub/Sub 作事件总线解耦采集与展示。
+- **实时孪生**：Three.js + WebSocket，状态 / 动作双通道动画；断线指数退避重连 + 心跳保活。
+- **时序可溯**：InfluxDB 3 旁路存储，前端「场景绑定看板」把图表数据绑到具体孪生体。
+- **健壮通信**：TCP keepalive 探死链、WS 可选鉴权、生产/消费解耦，单点故障不拖垮全链。
 
-| 路径 | 说明 |
-|------|------|
-| `backend/` | Python 后端：FastAPI + Redis 消息总线 + TCP 通信 |
-| `frontend/` | Three.js 3D 可视化前端（Vite） |
-| `simulation/` | PlantSimulation 仿真相关（含示例 SimTalk 脚本） |
-| `docs/` | 接口、架构、部署文档 |
-| `docker-compose.yml` | 一键编排全部组件（Redis / InfluxDB 3 / Explorer / 后端 / 前端） |
-| `.env.example` | Docker Compose 环境变量模板（复制为 `.env` 后填写） |
-| `requirements.txt` | 后端 Python 依赖清单 |
-
-### 🔧 需你本机自行安装 / 准备（**不在仓库内**）
-
-| 组件 | 用途 | 是否必选 | 怎么准备 |
-|------|------|----------|----------|
-| **Docker Desktop** | 方式一（推荐）用它一键编排全部组件 | 方式一必选 | 安装并启动 |
-| **Python** | 运行后端（方式二） | 方式二必选 | 建议用 conda 建 `DT` 环境并 `pip install -r requirements.txt` |
-| **Node.js** | 运行前端（方式二） | 方式二必选 | 安装后 `npm install` |
-| **Redis** | 消息总线（必选；`BUS_TYPE` 目前仅支持 `redis`） | 必选 | 方式一由 compose 自动起；方式二用 `docker run redis` 或本机原生 |
-| **InfluxDB 3 Core** | 时序数据库（可选增强） | 可选 | 方式一由 compose 起；方式二官网下载原生二进制 |
-| **PlantSimulation** | 分析外挂（订阅 `source/state` 做预测/推演，已断开实时环） | 可选 | 自行安装（商业软件，不随仓库提供） |
-
-> 必选 = 后端 + 前端 + Redis（方式一由 compose 提供 Redis；方式二需你自备）。InfluxDB / Explorer 为可选增强；默认数据源是随仓库的 Python 实时仿真器（无需安装），PlantSimulation 为可选分析外挂。
-
-## 快速开始
-
-本项目提供两种**等价**的启动方式，**都不依赖任何启动脚本**（脚本不在仓库内）：
-
-- **方式一：Docker Compose 一键启动（推荐）**——一条命令起全部五个组件。
-- **方式二：原生命令行逐步启动**——在本机 Python / Node / Docker 环境里分别敲命令，便于单步调试。
-
-## 系统架构
+## 架构 · 微服务拓扑
 
 ```mermaid
 flowchart TB
@@ -55,391 +27,162 @@ flowchart TB
 
     subgraph Docker[Docker Compose 网络 dt-net]
         FE[前端 Vite<br/>:8080 → 容器 :5173]
-        BE[后端 FastAPI<br/>:8300 / WebSocket]
-        RD[(Redis Pub/Sub<br/>:6379)]
+        BE[后端 FastAPI<br/>采集 + WS/HTTP :8300]
+        RD[(Redis Pub/Sub<br/>:6379 · 事件骨干)]
         IDB[(InfluxDB 3 Core<br/>:18080)]
         EXP[Explorer UI<br/>:8888 → 容器 :8080]
     end
 
-    SRC[(数据源 Simulator<br/>宿主 :30000)]
+    SRC[(数据源 Simulator<br/>宿主 :30000 · 独立进程)]
 
     User -->|HTTP| FE
     User -->|HTTP| EXP
     FE <-->|WebSocket /ws| BE
-    BE <-->|publish / subscribe| RD
     SRC -->|TCP :30000 状态| BE
+    BE <-->|publish / subscribe| RD
     BE -.->|best-effort 写入| IDB
     EXP <-->|host.docker.internal:18080| IDB
 ```
 
-> 跨网络说明：后端容器（TCP 客户端）经 `host.docker.internal:30000` 连宿主上运行的数据源（默认 Python 实时仿真器，监听 `0.0.0.0:30000`）；Explorer 由浏览器经 `host.docker.internal:18080` 访问 InfluxDB。实时环为单向（数据源→后端），后端断线每 3s 自动重连。
+**为什么这是微服务架构**：
 
----
+- **可插拔数据源微服务**：`connectors/*` 是独立进程（TCP Server），可独立部署 / 重启 / 替换；后端只认协议，换数据源零改动。起多个连接器实例 → 汇入同一总线 → 前端统一可见，天然支持水平扩展。
+- **事件骨干（Service Mesh）**：Redis Pub/Sub 是各服务间唯一契约，生产者（采集端）与消费者（WS 网关）互不感知，故障隔离、可独立伸缩。
+- **独立可部署单元**：前端、后端、InfluxDB、Explorer 各自容器化，`docker-compose` 即编排层；任意服务可单独 `restart` 不影响其余。
+- **解耦的单向实时环**：`数据源 → 后端采集 → Redis → 后端订阅 → WS → 前端`。后端可进一步拆为「采集服务（TCP→Redis）」+「网关服务（Redis→WS/HTTP）」两个微服务（见 `docs/architecture.md` 演进方向），使 Redis 成为两服务间唯一边界。
+
+## 仓库内含 / 需自准备
+
+| 随仓库发布（`git clone` 即得） | 需你本机/容器准备（不在仓库内） |
+|------|------|
+| `backend/`（FastAPI + Redis 总线）、`frontend/`（Three.js + Vite）、`connectors/`（可插拔数据源）、`docs/`、`docker-compose.yml`、`.env.example` | **Docker Desktop**（方式一必选）；Redis / InfluxDB 3（方式一由 compose 提供）；PlantSimulation 为可选分析外挂（商业软件，不随仓库） |
+
+## 快速开始
 
 ### 方式一：Docker Compose 一键启动（推荐）
 
-1. 安装 Docker Desktop 并启动。
-2. 复制环境变量模板并**填写令牌**（必填）：
+只需装 Docker（含 Compose 插件），后端/前端在各自容器内构建运行。
+
+1. 复制环境变量模板并填写令牌：
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   - **`INFLUXDB3_AUTH_TOKEN`（必填）**：管理员令牌，须带 `apiv3_` 前缀，例如 `apiv3_$(openssl rand -hex 16)`。它由 `influxdb3/entrypoint.sh` 经 `--admin-token-file` 预设为 InfluxDB 服务端 token，并同时注入 Explorer / 后端，**三方共用同一令牌**。
+   - **`EXPLORER_SESSION_SECRET_KEY`（建议填）**：`openssl rand -hex 32`。
+
+2. 一键启动：
+
+   ```bash
+   docker compose up -d
+   ```
+
+   | 组件 | 地址 |
+   |------|------|
+   | 前端 | http://localhost:8080 |
+   | 后端 WS | ws://localhost:8300/ws |
+   | InfluxDB 3 | http://localhost:18080 |
+   | Explorer | http://localhost:8888 |
+
+   ```bash
+   docker compose ps                 # 查看状态
+   docker compose logs -f backend    # 跟踪某服务日志
+   docker compose restart frontend   # 单独重启某服务
+   docker compose down               # 停止（加 -v 删 redis 数据卷）
+   ```
+
+> **换令牌**：改 `.env` 的 `INFLUXDB3_AUTH_TOKEN` 后，须清空 `./.docker/influxdb3-data` 内容再 `docker compose up -d influxdb3 explorer` 重建，否则报 `INVALID_TOKEN_CORE`。
+
+### 方式二：原生命令行逐步启动（便于调试）
+
+每个组件独立命令，无脚本依赖；需本机装 Redis、Python（建议 conda `DT` 环境）、Node.js。
 
 ```bash
-cp .env.example .env
-```
-
-用编辑器打开 `.env`，设置以下两项（其余保持默认即可）：
-
-- **`INFLUXDB3_AUTH_TOKEN`（必填）**：InfluxDB 3 Core 管理员令牌。必须带 `apiv3_` 前缀，例如：
-  - 生成：`openssl rand -hex 16`，取输出拼上前缀 `apiv3_`，例如 `apiv3_9f2a7c4e8b1d2c3f`；
-  - 该令牌由 `influxdb3/entrypoint.sh` 通过 `--admin-token-file` 预设为 InfluxDB 的**服务端** admin token，并同时经 `DEFAULT_API_TOKEN` 注入 Explorer / 后端，**三方共用同一令牌、无需手动配置 Explorer**。
-  - ⚠️ 重要：`INFLUXDB3_AUTH_TOKEN` 环境变量本身**只用于 InfluxDB CLI 客户端认证**，`influxdb3 serve` 不会读取它来预设 token。本项目用 entrypoint 脚本把同一个值写成离线 token 文件来预设，从而服务端 token 与 `.env` 始终一致。
-- **`EXPLORER_SESSION_SECRET_KEY`（建议填）**：`openssl rand -hex 32` 取输出填入，用于 Explorer 会话安全。
-
-> 只需安装 Docker（含 Compose 插件）即可，无需在本机装 Python / Node.js——后端与前端都在各自容器内构建运行。
-
-3. 一键启动：
-
-```bash
-docker compose up -d
-```
-
-启动后访问：
-
-| 组件 | 地址 |
-|------|------|
-| 前端 | http://localhost:8080 |
-| 后端 WebSocket | ws://localhost:8300/ws |
-| InfluxDB 3 | http://localhost:18080 |
-| Explorer | http://localhost:8888 |
-| Redis | 6379（容器内，自动编排，无需单独起） |
-
-常用命令：
-
-```bash
-docker compose ps                 # 查看五个容器状态
-docker compose logs -f backend    # 跟踪某服务日志（排错用）
-docker compose restart frontend   # 单独重启某服务
-docker compose down               # 停止全部（加 -v 删除 redis 数据卷）
-```
-
-> **令牌说明**：InfluxDB 与 Explorer 与后端共用 `.env` 里的 `INFLUXDB3_AUTH_TOKEN`（见上方第 2 步），由 `influxdb3/entrypoint.sh` 预设为服务端 token。若之后要**更换**令牌：先在 `.env` 改 `INFLUXDB3_AUTH_TOKEN`，再清空 `./.docker/influxdb3-data` 目录内容（保留空文件夹），然后 `docker compose up -d influxdb3 explorer` 重建——InfluxDB 会用新令牌重新初始化，Explorer 同步新值。注意：不重建数据目录直接改 `.env` 会因"已存在 token 与新 token 不符"而报 `INVALID_TOKEN_CORE`。
-
----
-
-### 方式二：原生命令行逐步启动（不依赖 Docker 编排）
-
-适合想用本机 Python / Node 环境直接调试的场景。每个组件都是独立命令，**无需任何 `.bat` / 脚本**。
-
-#### 1. Redis（消息总线，必选）
-
-```bash
+# 1) Redis（必选）
 docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
-```
 
-`6379` 端口需可用。验证：`docker exec redis-twin redis-cli ping` → `PONG`（本机装了 redis-cli 也可直接 `redis-cli ping`）。
-本机已原生安装 Redis 并设为自启动的，可跳过这一步。
+# 2) 后端（FastAPI，必选；默认 0.0.0.0:8300）
+conda activate DT && cd backend && pip install -r requirements.txt && python -m src.main
 
-#### 2. InfluxDB 3 Core（时序库，可选）
+# 3) 前端（Vite，必选）
+cd frontend && npm install && npm run dev   # http://localhost:5173
 
-1. 从官网下载 InfluxDB 3 Core 并解压到本机。
-2. **首次启动会生成管理员令牌**：在终端运行以下命令，控制台会打印一串 `apiv3_...` 令牌，**请保存备用**（前端 / Explorer 连接需用到）。
-
-```bash
-"<InfluxDB3 安装路径>/influxdb3.exe" serve --node-id=<节点名，如 node0> --object-store=file --data-dir=<数据目录> --http-bind=0.0.0.0:18080 --admin-token-recovery-http-bind=127.0.0.1:18081
-```
-
-3. **务必绑定 `0.0.0.0`**（不要 `127.0.0.1`）——否则后面的 Explorer（运行在 Docker 容器内）连不上。
-4. 验证：`curl http://localhost:18080/health` 返回 `401` 即正常（该端点需鉴权）。
-
-> ⚠️ 端口避坑：HTTP 端口必须避开 Windows 为 Docker / Hyper-V 预留的区段（用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看）。旧值 `8181/8182` 落在预留段 `8103-8202` 内会绑定失败，故用 `18080/18081`。
-
-#### 3. InfluxDB3 Explorer（Web 查看器，可选）
-
-Explorer 是 Docker 容器，直接执行以下单行命令（`<...>` 处替换为你的实际值；`SESSION_SECRET_KEY` 用 `openssl rand -hex 32` 生成一个随机串）：
-
-```bash
-docker run -d --name influxdb3-explorer -p 127.0.0.1:8888:8080 -v <配置目录>:/app-root/config:ro -v <会话库目录>:/db:rw -e SESSION_SECRET_KEY=<随机32字节hex> -e DEFAULT_API_TOKEN=<你的 apiv3_ 令牌> -e DEFAULT_INFLUX_SERVER=http://host.docker.internal:18080 -e "DEFAULT_SERVER_NAME=Local InfluxDB 3" -e DEFAULT_INFLUX_DATABASE= influxdata/influxdb3-ui:1.9.0 --mode=admin
-```
-
-要点：
-
-- **`DEFAULT_INFLUX_SERVER` 必须用 `host.docker.internal`**（不要用 `localhost`）——容器内 `localhost` 指向容器自己。
-- 必须挂载可写 `db` 卷并设置 `SESSION_SECRET_KEY`，否则报 `Error while getting session data`。
-- `DEFAULT_*` 环境变量用于让 Explorer 首次启动时自动预载服务器；若不用，也可在 Web 界面手动填写（Server URL 同样填 `http://host.docker.internal:18080`）。
-- 浏览器打开 http://localhost:8888 → 应自动连上 "Local InfluxDB 3"，否则手动 Add Server。
-
-#### 4. 后端（FastAPI，必选）
-
-```bash
-conda activate DT            # 或你的 Python 环境
-cd backend
-pip install -r requirements.txt
-python -m src.main
-```
-
-- 默认监听 `0.0.0.0:8300`（HTTP 与 WebSocket 共用）。
-- 依赖：`fastapi` / `uvicorn` / `redis` / `websockets`（见 `requirements.txt`）。
-- Redis 未运行时后端仍可启动（启动期容错），但数据无法经总线流转；请保证 Redis 已就绪。
-
-#### 启用 InfluxDB 时序写入（可选）
-
-后端默认**不**写库（`INFLUXDB_ENABLED=false`）。要启用，设置环境变量后启动后端：
-
-```bash
-# backend 目录下，启动前设置（Windows cmd）
-set INFLUXDB_ENABLED=true
-# 若 InfluxDB 3 设了鉴权，提供令牌（建议走环境变量 / .env，勿硬编码进仓库）
-set INFLUXDB_TOKEN=apiv3_xxxxxxxx
-python -m src.main
-```
-
-- 写入为 best-effort：写库失败仅记日志，不影响实时孪生流。
-- 建库（首次）：`influxdb3 create database digital_twin`；measurement 首写自动创建，无需预建表。
-- 验证：浏览器开 `http://localhost:8300/status`，看 `influxdb.write_count` 是否增长、`last_error` 是否为 null；或直接到 Explorer 查 `SELECT * FROM station_state`。
-
-#### 后端 WebSocket 可选鉴权（默认关闭）
-
-`/ws` 端点默认**不校验**，开放 demo 直接可连。若部署到公网想加一层防护，设环境变量后重启后端：
-
-```bash
-set WS_TOKEN=my-secret-token
-python -m src.main
-```
-
-启用后，前端或任意 WS 客户端需带令牌连接，否则服务端直接关闭（1008）：
-
-```
-ws://localhost:8300/ws?token=my-secret-token
-# 或请求头 Authorization: Bearer my-secret-token
-```
-
-> 仅后端校验，**前端无需改动**（默认仍不传 token，保持开源 clone 即跑）。数据源 TCP 连接与 WS 鉴权互不干扰。
-
-> 健壮性：后端→数据源 TCP 连接采用**指数退避重连**（3s→6s→12s→…封顶 30s，带抖动）并开启 TCP keepalive 探测死链；前端 WS 断线后同样**指数退避重连**并每 15s 发心跳 `ping`。
-
-#### 5. 前端（Vite，必选）
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-浏览器打开 http://localhost:5173（前端通过 `ws://localhost:8300/ws` 连后端）。
-
-> 若本机 `5173` 被占用（常见于 Windows + WSL2 把该端口划为系统保留），可在 `frontend/vite.config.js` 改 `server.port`，或改用方式一的 Docker 前端（默认 8080，已避开常见保留段）。
-
-#### 6. 数据源（实时仿真器，可选）
-
-默认数据源是**随仓库的 Python 实时仿真器**（`connectors/sources/python_realtime.py`），无需安装任何商业软件：
-
-```bash
+# 4) 数据源仿真器（可选；默认 0.0.0.0:30000，后端自动连）
 python -m connectors.sources.python_realtime
 ```
 
-它作为 TCP 服务端监听 `0.0.0.0:30000`，后端（Docker 内 TCP 客户端）经 `host.docker.internal:30000` 自动连上，断线后每 3s 重连。
+- **启用 InfluxDB 时序写入**（可选）：设环境变量 `INFLUXDB_ENABLED=true` 后再起后端；写库为 best-effort，失败仅记日志。
+- **WS 可选鉴权**（默认关闭）：设 `WS_TOKEN=xxx` 后重启后端，前端需 `ws://localhost:8300/ws?token=xxx` 或 `Authorization: Bearer xxx` 连接，否则关闭（1008）。
 
-> 若要用 PlantSimulation 做离线预测/推演，把它当作**分析外挂**：订阅 `source/state` 只读消费，自行在 SimTalk 里做推演，不再接入实时控制环（`.spp` 模型不随仓库提供，需本机自行准备）。
+## 数据源
 
-#### 7. 访问
-
-浏览器打开对应前端地址即可看到 3D 可视化：
-- 方式一（Docker）：http://localhost:8080
-- 方式二（原生）：http://localhost:5173
-
----
-
-## 演示数据源（无需 PlantSimulation）
-
-默认数据源是随仓库的 **Python 实时仿真器**（`connectors/sources/python_realtime.py`），纯标准库实现，**不依赖任何商业软件**，clone 后即可让 3D 场景动起来。它作为 TCP 服务端监听 `0.0.0.0:30000`，后端（TCP 客户端）连上来后持续推送 `state` / `action` 信封。
-
-### 运行（二选一，取决于启动方式）
-
-**方式一（Docker 后端）：** 在**宿主机**起仿真器，容器后端经 `host.docker.internal:30000` 自动连上：
+默认数据源是随仓库的 **Python 实时仿真器**（`connectors/sources/python_realtime.py`，纯标准库），clone 即见 3D 动起来，不依赖任何商业软件。它作 TCP 服务端监听 `0.0.0.0:30000`，后端连上后持续推 `state`/`action` 信封。
 
 ```bash
-# 终端 A：宿主机起仿真器
-python -m connectors.sources.python_realtime --host 0.0.0.0 --port 30000
-
-# 终端 B：起整套（后端在容器内，会去连宿主 :30000）
-docker compose up -d
+python -m connectors.sources.python_realtime --dry-run   # 不联网，仅打印前几帧自检
+python -m connectors.sources.python_realtime             # 默认 0.0.0.0:30000
 ```
-
-**方式二（原生后端）：** 后端连 `127.0.0.1:30000`，先起仿真器再起后端即可：
-
-```bash
-python -m connectors.sources.python_realtime      # 默认 0.0.0.0:30000
-# 另开终端：cd backend && python -m src.main
-```
-
-### 参数
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
-| `--host` | `0.0.0.0` | TCP 监听地址 |
-| `--port` | `30000` | TCP 监听端口 |
+| `--host` / `--port` | `0.0.0.0:30000` | TCP 监听地址/端口 |
 | `--hz` | `20` | `state` 推送频率（Hz） |
-| `--dry-run` | 关闭 | 不联网，仅打印前几帧用于自检 |
+| `--dry-run` | 关闭 | 不联网，仅自检帧格式 |
 
-### 自检
-
-不依赖后端/前端，先确认帧格式正确：
+**接入真实工业数据源（MQTT）**：`connectors/sources/mqtt_source.py` 订阅 MQTT broker，把符合平台协议的 `state`/`action` 信封经 TCP `:30000` 转发给后端——**后端零改动**，与仿真器并列。依赖 `pip install -r connectors/requirements.txt`（仅 paho-mqtt），运行示例：
 
 ```bash
-python -m connectors.sources.python_realtime --dry-run
-```
-
-应输出一串 `state` 帧 JSON（含 `组装工位 #1`、`搬运机器人 #1`、`焊接悬挂机器人 #1` 等），每 80 帧穿插一条 `action` 帧（驱动 `组装工位 #1` 的 `LeftSlide` 零件位移动画）。
-
-> 该仿真器驱动前端 `loadAllModels()` 预载的默认场景（组装工位 / 搬运机器人 / 焊接机器人 / 缓冲区），**无需任何前端改动**。若想接真实 PlantSimulation，把它当作只读分析外挂（订阅 `source/state`），或按 `connectors/base.py` 的协议自行实现一个数据源连接器。
-
-### 查看历史数据 · 场景绑定看板（InfluxDB）
-
-后端会把 `state`/`action` **旁路写入 InfluxDB 3**（best-effort）。前端工具栏「历史数据」按钮打开侧边看板，数据**绑定到具体孪生体**（设备/零件来自 3D 场景，避免 id 漂移），对标中台「场景绑定报表」概念但零重依赖。
-
-- **前置条件**：必须开启 `INFLUXDB_ENABLED=true`（默认 `false`，仅写库、不影响实时孪生流），且演示数据源在跑（否则 InfluxDB 里无 `station_state` 可查）。
-- **聚焦查询**：选设备（如 `组装工位 #1`）→ 选零件（如 `Clamp`）→ 选字段（如 `temp`）→ 选时间范围（15m/1h/6h/24h/7d）→ 刷新（或勾选「自动」每 10s 拉取）。
-- **📌 绑定选中设备**：在 3D 场景里点选一个模型，再点此按钮，自动把选中孪生体 id 填入设备下拉——直观展示「面板数据 ← 具体孪生体」。
-- **＋ 加入看板**：把当前选择快照成一张卡片，看板区可并排多张（如某设备 `temp` + `pos_x` 同屏），每张卡片独立拉取 + 独立 SVG 图，适合对比多孪生体/多指标。
-- **后端接口**：`GET /api/history?device=...&part=...&field=...&range=...`（未启用返回 503，查询异常返回 502）。详见 `docs/api.md`。
-
-> 未启用 InfluxDB 时面板会提示「InfluxDB 未启用」，属正常；实时 3D 不受影响。
-
-### 接入真实工业数据源（MQTT）
-
-除了内置仿真器，本项目还提供 **MQTT 数据源连接器**（`connectors/sources/mqtt_source.py`），证明「后端只认协议、不挑数据源」——同一个后端既能接 TCP 直推的仿真器，也能接 MQTT 桥接器，**后端零改动**。
-
-链路：`MQTT broker → 连接器(订阅) → TCP :30000 → 后端(FastAPI) → Redis/WS → 前端`。
-
-**前置依赖**（仅连接器需要，不污染后端）：
-
-```bash
-pip install -r connectors/requirements.txt   # 仅 paho-mqtt
-```
-
-**运行：**
-
-```bash
-# 终端 A：起 MQTT 连接器（订阅 broker，经 TCP 转发给后端）
 python -m connectors.sources.mqtt_source --broker test.mosquitto.org --topic digital-twin/source
-
-# 终端 B：起整套（后端连 :30000，效果与仿真器完全一致——前端 3D 动起来）
-docker compose up -d
-```
-
-可用任意 MQTT broker：公共测试 `test.mosquitto.org`、本地 `mosquitto` / `emqx`，或工厂内网 broker。**同一主题下推送符合平台协议的 `state` / `action` 信封即可**。例如用随附的发布端演示：
-
-```bash
-# 终端 C：发测试数据（state 每 0.1s，action 每 4s）
 python -m connectors.examples.publish_demo --broker test.mosquitto.org --topic digital-twin/source
 ```
 
-**参数：**
+## 场景绑定看板（InfluxDB 历史）
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `--broker` | `test.mosquitto.org` | MQTT broker 地址 |
-| `--mqtt-port` | `1883` | MQTT broker 端口 |
-| `--topic` | `digital-twin/source` | 订阅主题 |
-| `--username` / `--password` | 空 | MQTT 认证（可选） |
-| `--client-id` | 随机 | MQTT client id（可选） |
-| `--host` / `--port` | `0.0.0.0:30000` | 对后端暴露的 TCP 地址 |
-| `--dry-run` | 关闭 | 不连 MQTT/TCP，仅验证信封解析（单帧 / 拼接帧 / 非法 JSON 均正确处理） |
+后端把 `state`/`action` **旁路写入 InfluxDB 3**（best-effort）。前端工具栏「历史数据」打开侧边看板，数据**绑定到具体孪生体**（设备/零件来自 3D 场景，避免 id 漂移），对标中台「场景绑定报表」但零重依赖。
 
-**协议要点**：连接器对收到的 MQTT 载荷做 JSON 校验，`type ∈ {create,state,action,reset,attach,detach}` 才入队转发；支持「无分隔符、多帧拼接」的载荷（与平台 TCP 帧约定一致）；非 JSON 或未知 `type` 会被忽略并打印提示。后端下发的指令通道（预测 / 推演回写）暂不消费，仅占位。
-
----
+- **前置**：开启 `INFLUXDB_ENABLED=true`（默认 `false`，仅写库、不影响实时孪生流），且数据源在跑。
+- **聚焦查询**：选设备 → 选零件 → 选字段（如 `temp`/`pos_x`）→ 选时间范围 → 刷新（或勾「自动」每 10s 拉取）。
+- **📌 绑定选中设备**：在 3D 场景点选模型后点此按钮，自动把选中孪生体 id 填入设备下拉。
+- **＋ 加入看板**：把当前选择快照成卡片，看板区可并排多张，每张独立拉取 + 独立 SVG 图。
+- **后端接口**：`GET /api/history?device=&part=&field=&range=`（未启用返回 503，查询异常 502）。详见 `docs/api.md`。
 
 ## 端口总览
 
-| 组件 | 方式一 Docker 宿主端口 | 方式二 原生命令行端口 | 说明 |
-|------|----------------------|----------------------|------|
-| 前端 (Vite) | **8080**（容器 5173） | 5173 | Docker 方式用 8080 避开 Windows 保留段 |
+| 组件 | Docker 宿主端口 | 原生命令行端口 | 说明 |
+|------|----------------|------|------|
+| 前端 (Vite) | **8080**（容器 5173） | 5173 | Docker 用 8080 避 Windows 保留段 |
 | 后端 (FastAPI) | 8300 | 8300 | HTTP 与 WebSocket 共用 |
 | InfluxDB 3 Core | 18080 | 18080 | 绑定 `0.0.0.0` |
 | InfluxDB3 Explorer | 8888 | 8888 | 映射 8888 → 容器 8080 |
 | Redis | 6379 | 6379 | 消息总线（必选） |
-| 数据源 Simulator | — | 30000 | 实时数据源 TCP 端口（可选，默认 Python 仿真器） |
+| 数据源 Simulator | — | 30000 | 实时数据源 TCP（可选） |
 
-> 本机端口：`8080/8300/18080/8888/6379`（Docker）或 `5173/8300/18080/8888/6379`（原生）· `30000`(数据源 Simulator)。若被占用，启动前需释放或改用其他端口。
+## 排错
 
-## Windows 端口保留排错
+- **`INVALID_TOKEN_CORE`（HTTP 401）**：Explorer 发的 token 与 InfluxDB 接受的不一致。根因：`INFLUXDB3_AUTH_TOKEN` 环境变量只供 CLI 认证，`influxdb3 serve` 不会用它预设 token——本项目用 entrypoint 的 `--admin-token-file` 预设。改 `.env` 令牌后务必清空 `./.docker/influxdb3-data` 再重建 influxdb3。
+- **Windows 端口被保留（`bind: access forbidden`）**：Docker/WSL2 会把 5173/3000/5000 等常用端口划为排除段（动态）。查：`netsh int ipv4 show excludedportrange protocol=tcp`；解决：改 `docker-compose.yml` 宿主端口（如 `"9000:5173"`）或 `frontend/vite.config.js` 的 `server.port`，比 `net stop winnat` 更稳。
+- **Explorer 连不上 InfluxDB**：InfluxDB 须绑 `0.0.0.0:18080`（非 `127.0.0.1`）；Explorer 的 Server URL 须用 `host.docker.internal`（容器内 `localhost` 指向自己）；须挂可写 `db` 卷并设 `SESSION_SECRET_KEY`。
 
-在 **Windows + WSL2 / Docker Desktop** 上，`docker compose up` 偶尔报：
+## 测试
 
+后端单元测试覆盖 `data_processor` / `bus` / `websocket_handler` / `source_connector`（含双编码解析、消息总线契约、广播容错、重连退避）：
+
+```bash
+cd backend
+pip install -r requirements.txt          # 含 pytest / pytest-asyncio
+pytest                                    # 或 poetry/conda 环境直接 pytest
 ```
-ports are not available: exposing port TCP 0.0.0.0:XXXX -> ... listen tcp ...: bind: access forbidden
-```
-
-这表示该宿主端口被 Windows 划为**排除端口范围（excluded port range）**——并非被某进程占用，杀进程也解不了。原因：Docker 建容器网络时 Windows 会随机保留一段端口给 NAT 用，段内所有端口对 Docker 和本机应用都暂时不可用（5173 / 3000 / 5000 等开发者常用端口尤其易中招）。该保留段是动态的，重启 Windows / Docker 后可能变化。
-
-排查与解决：
-
-```powershell
-# 管理员 PowerShell 查看被保留的端口段
-netsh int ipv4 show excludedportrange protocol=tcp
-```
-
-- 若项目默认端口（如前端 8080）恰好落在某段内，编辑 `docker-compose.yml` 把对应服务的宿主端口改到空闲段（格式 `"宿主端口:容器端口"`），例如 `"9000:5173"`；
-- 本机原生 `npm run dev` 同理：改 `frontend/vite.config.js` 的 `server.port`；
-- 想彻底释放保留段可管理员 PowerShell 执行 `net stop winnat` / `net start winnat`，但重启可能复发，故通常改端口更稳。
-
-## Explorer 连接 InfluxDB 的关键点
-
-Explorer 后端运行在 Docker 容器内，通过 `http://host.docker.internal:18080` 访问宿主机 InfluxDB（容器内 `localhost` 指向容器自己）。因此：
-
-- InfluxDB 必须绑定 **`0.0.0.0:18080`**（而非 `127.0.0.1`），容器才能访问；
-- Explorer 的 Server URL 须为 `host.docker.internal`（手动填写时同理）；
-- Windows Docker Desktop 不支持 `--network host`（Linux 才有），故采用此标准做法；
-- 必须挂载可写 `db` 卷并设置 `SESSION_SECRET_KEY`，否则报 `Error while getting session data`。
-
-> 安全提示：`0.0.0.0:18080` 会把 InfluxDB 暴露到本机所在局域网。本机开发通常无碍；若在不可信网络，可改为绑定具体内网 IP。
-
-## InfluxDB 令牌排错（INVALID_TOKEN_CORE）
-
-若 Explorer 日志出现 `INVALID_TOKEN_CORE` / `Invalid API token for Core/Enterprise product`（HTTP 401），说明 Explorer 发去的 token 与 InfluxDB 实际接受的 token 不一致。成因与解决：
-
-- **根因**：`INFLUXDB3_AUTH_TOKEN` 环境变量只供 CLI 客户端认证，`influxdb3 serve` 不会用它预设 token。本项目已用 `influxdb3/entrypoint.sh` 通过 `--admin-token-file` 把 `.env` 的 token 预设为服务端 token；若你跳过 entrypoint、直接在 compose 里只写 `INFLUXDB3_AUTH_TOKEN` 环境变量，InfluxDB 会自己生成随机 token，与 Explorer 的 `.env` token 不符 → 必报此错。
-- **旧数据目录残留**：InfluxDB 数据目录（`.docker/influxdb3-data`）里已存有之前自动生成的 token，而你后来改了 `.env` 的 token。解决：清空 `.docker/influxdb3-data` 内容 → `docker compose up -d influxdb3 explorer` 重建。
-- **确认一致**：InfluxDB / Explorer / 后端三处的 token 必须完全相同（都来自 `.env` 的 `INFLUXDB3_AUTH_TOKEN`）。改 `.env` 后切记重建 influxdb3（并清空其数据目录）。
-
-## 数据流
-
-主链路经 Redis 消息总线流转（实时环为**单向**：数据源 → 后端 → 前端）：
-
-- **状态下行**：`数据源(Simulator) →(TCP:30000)→ 后端采集端（TCP 客户端，自动重连）→ publish "source/state" →【Redis】→ subscribe → 后端订阅端 →(WebSocket:8300)→ 前端浏览器`
-
-> 原「指令上行 / POST /command」控制通道已随架构解耦移除——后端不再向数据源回写指令。PlantSimulation 已降级为只读分析外挂：订阅 `source/state` 做预测/推演，不参与实时控制环。
-
-```mermaid
-flowchart LR
-    SRC[(数据源 Simulator<br/>:30000)]
-    BE[后端 FastAPI<br/>采集 + 订阅]
-    BUS[(Redis Pub/Sub<br/>source/state)]
-    FE[前端浏览器<br/>:8080]
-    IDB[(InfluxDB 3 Core<br/>:18080)]
-    EXP[Explorer<br/>:8888]
-
-    SRC -->|TCP :30000 状态| BE
-    BE -->|publish source/state| BUS
-    BUS -->|subscribe| BE
-    BE -->|WebSocket :8300| FE
-
-    BE -.->|best-effort 写入<br/>station_state / station_action| IDB
-    IDB --> EXP
-```
-
-后端解析到 `state` / `action` 时还会**旁路写入 InfluxDB 3**（measurement 分别为 `station_state` / `station_action`，best-effort，不阻塞主流程）；字段含 `time`（接收时刻）与 `simulationTime`（仿真时刻），只写出现的维度，可在 Explorer 查 `SELECT * FROM station_state`。
 
 ## 技术栈
 
-- 仿真: PlantSimulation (SimTalk)
-- 后端: Python + FastAPI + uvicorn + redis (asyncio) + websockets
-- 消息总线: Redis Pub/Sub（传输无关抽象，支持后续平滑切换 MQTT；`BUS_TYPE` 目前仅支持 `redis`）
-- 时序存储: InfluxDB 3 Core（端口 18080；Web 界面 InfluxDB3 Explorer 1.9.0 :8888）
-- 前端: Three.js + Vite
-- 编排（可选）: Docker Compose 一键起全部组件
+- 仿真：PlantSimulation（SimTalk，可选分析外挂）
+- 后端：Python + FastAPI + uvicorn + redis(asyncio) + websockets
+- 消息总线：Redis Pub/Sub（传输无关抽象，支持后续切 MQTT；当前 `BUS_TYPE` 仅 `redis`）
+- 时序存储：InfluxDB 3 Core（:18080）+ InfluxDB3 Explorer（:8888）
+- 前端：Three.js + Vite
+- 编排：Docker Compose
 
 ## 文档
 
-- 接口说明：`docs/api.md`
-- 系统架构：`docs/architecture.md`
-- 部署指南：`docs/deployment.md`
+- 接口：`docs/api.md` · 架构：`docs/architecture.md` · 部署：`docs/deployment.md`

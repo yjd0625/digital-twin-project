@@ -40,3 +40,27 @@
 | 前端 | Three.js + Vite |
 | 通信 | TCP Socket (数据源<->后端), WebSocket (后端<->前端), Redis Pub/Sub (后端内部解耦) |
 | 消息总线 | Redis Pub/Sub（推荐用 Docker Compose 编排的 `dt-redis:6379`，或手动 `docker run redis-twin:6379`；Windows 原生 Redis 支持差，不推荐；主题 source/state） |
+
+## 演进方向：后端拆分为「采集服务」+「网关服务」（微服务强化，B 档）
+
+当前后端是单进程（`src/main.py` 同时承担 TCP 采集与 WS/HTTP 网关）。Redis Pub/Sub 已是两职责间的唯一边界，因此可无侵入地拆成两个独立微服务，**进一步强化微服务叙事**：
+
+```mermaid
+flowchart LR
+    SRC[(数据源 Simulator<br/>:30000)]
+    ING[采集服务 ingestion-service<br/>TCP 客户端 → Redis]
+    BUS[(Redis Pub/Sub<br/>source/state)]
+    GW[网关服务 gateway-service<br/>Redis → WS/HTTP :8300]
+    FE[前端]
+
+    SRC -->|TCP| ING
+    ING -->|publish| BUS
+    BUS -->|subscribe| GW
+    GW -->|WebSocket /ws| FE
+```
+
+- **采集服务（ingestion-service）**：跑现有 `source_read_loop` + `bus.publish(source/state)` + InfluxDB 旁路写入。只依赖 Redis 与数据源，不暴露任何端口给前端。
+- **网关服务（gateway-service）**：跑 `bus.subscribe(source/state) → processor.process → handler.broadcast`，并承载 `/ws`、`/api/history`、`/health`、`/status`。只依赖 Redis 与（可选）InfluxDB。
+- **拆分收益**：采集与展示彻底解耦，可各自独立部署/伸缩/重启；Redis 成为两服务间唯一契约，符合「服务网格」定义；`docker-compose` 增加 `ingestion` / `gateway` 两个 service 即可。
+- **代价**：需把现有 `src/main.py` 的共享单例（bus / handler / processor / source / influx_writer）按职责拆到两个入口；`source_connector` / `bus` / `data_processor` / `websocket_handler` 等模块**无需改动**（已解耦）。
+- **状态**：本档为规划，未实现；实现前建议先补全 #3 测试作为安全网。
