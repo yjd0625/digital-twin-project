@@ -1,38 +1,48 @@
-"""SourceClient 单元测试（mock 层，不依赖真实数据源）"""
-import unittest
-from unittest.mock import patch, MagicMock
+"""SourceClient 单元测试（mock socket，不依赖真实数据源）"""
+from unittest.mock import MagicMock, patch
 
-import sys
-sys.path.insert(0, "..")
-
-from backend.src.source_connector import SourceClient
+from src.source_connector import SourceClient
 
 
-class TestSourceClient(unittest.TestCase):
+@patch("src.source_connector.socket.socket")
+def test_connect(mock_socket_cls):
+    mock_sock = MagicMock()
+    mock_socket_cls.return_value = mock_sock
 
-    @patch("backend.src.source_connector.socket.socket")
-    def test_connect(self, mock_socket_cls):
-        mock_sock = MagicMock()
-        mock_socket_cls.return_value = mock_sock
+    conn = SourceClient()
+    conn.connect()
 
-        conn = SourceClient()
-        conn.connect()
-
-        mock_sock.connect.assert_called_once()
-        self.assertTrue(conn.is_connected)
-
-    @patch("backend.src.source_connector.socket.socket")
-    def test_close(self, mock_socket_cls):
-        mock_sock = MagicMock()
-        mock_socket_cls.return_value = mock_sock
-
-        conn = SourceClient()
-        conn.connect()
-        conn.close()
-
-        self.assertFalse(conn.is_connected)
-        mock_sock.close.assert_called_once()
+    mock_sock.connect.assert_called_once()
+    assert conn.is_connected is True
 
 
-if __name__ == "__main__":
-    unittest.main()
+@patch("src.source_connector.socket.socket")
+def test_close(mock_socket_cls):
+    mock_sock = MagicMock()
+    mock_socket_cls.return_value = mock_sock
+
+    conn = SourceClient()
+    conn.connect()
+    conn.close()
+
+    assert conn.is_connected is False
+    mock_sock.close.assert_called_once()
+
+
+def test_backoff_increases_and_caps():
+    conn = SourceClient()
+    d1 = conn.next_backoff()  # 第 1 次失败
+    d2 = conn.next_backoff()  # 第 2 次失败
+    assert d2 > d1
+    # 连续多次后封顶 30s（含抖动不超过 33s）
+    for _ in range(10):
+        d = conn.next_backoff()
+    assert d <= 33.0
+
+
+def test_reset_backoff():
+    conn = SourceClient()
+    conn.next_backoff()
+    conn.next_backoff()
+    conn.reset_backoff()
+    assert conn._failures == 0
