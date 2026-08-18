@@ -1,4 +1,5 @@
 """数据聚合、计算、格式化"""
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,7 +11,6 @@ class DataProcessor:
     @staticmethod
     def parse(raw: str) -> dict:
         """解析数据源(Source)发来的字符串，返回结构化字典"""
-        import json
         raw = raw.strip()
         obj = None
         try:
@@ -37,9 +37,9 @@ class DataProcessor:
 
     @staticmethod
     def process(data: dict) -> dict:
-        """数据处理占位函数：解析之后、广播前端之前的二次加工环节。
+        """数据处理扩展点：解析之后、广播前端之前的二次加工环节。
 
-        当前仅原样透传，作为后续业务逻辑的唯一种植点（stub）。
+        当前仅原样透传，作为后续业务逻辑的唯一种植点。
         后续可在此实现：
           - 字段映射 / 重命名（与前端约定字段对齐）
           - 单位换算、精度裁剪
@@ -47,5 +47,4 @@ class DataProcessor:
           - 设备状态聚合、派生指标计算
           - 按前端所需结构重组（type 信封分流等）
         """
-        # TODO: 在此实现具体的数据处理逻辑（占位，暂原样返回）
         return data

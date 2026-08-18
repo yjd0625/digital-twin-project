@@ -95,7 +95,6 @@ export class DataHandler {
     this.objects = ctx.objects || {};                      // 向后兼容，预留直接注册接口
     this.updateInfo = ctx.updateInfo || (() => {});
     this.updateSpeed = ctx.updateSpeed || (() => {});   // 线速度独立标签（不覆盖连接状态）
-    this.latestData = null;
 
     // ======================== 动作队列 / 动画状态 ========================
     this.actionQueue = [];                 // 待执行指令 [{id, part, target, duration}]
@@ -110,7 +109,6 @@ export class DataHandler {
   process(data) {
     if (!data || typeof data !== "object") return data;
     const type = data.type || "state";     // 无 type 时默认按 state 处理（兼容旧格式）
-    this.latestData = data;
 
     // 线速度 / 播放倍率：所有消息类型共享（action 动画也需据此加速）
     if (data.simulateSpeed !== undefined) {
@@ -305,7 +303,7 @@ export class DataHandler {
     this._pump();
   }
 
-  /** 启动队列中「对应零件未在动画中」的指令；同零件指令自动排队等待 */
+  /** 启动队列中「对应零件未在动画中」的指令；同零件指令自动排队等待（每帧动画推进后调用）*/
   _pump() {
     for (let i = this.actionQueue.length - 1; i >= 0; i--) {
       const cmd = this.actionQueue[i];
@@ -317,7 +315,9 @@ export class DataHandler {
     }
   }
 
-  /** 把一条指令转为活动动画：记录 from/to（未给定的轴保持现状 → 不动）*/
+  /** 把一条指令转为活动动画：记录 from/to（未给定的轴保持现状 → 不动）
+   * @param {{id: string, part: string, target: object, duration: number}} cmd 零件级指令
+   */
   _start(cmd) {
     const model = this.findModelById(cmd.id);
     if (!model) { console.warn("action: 未找到模型 id=", cmd.id); return; }
@@ -404,7 +404,9 @@ export class DataHandler {
     this.activeAnimations.clear();
   }
 
-  /** 取消某零件的活动动画与排队指令（状态优先于动画）*/
+  /** 取消某零件的活动动画与排队指令（状态优先于动画）
+   * @param {string} key 形如 "id::part" 的动画键
+   */
   _cancel(key) {
     this.activeAnimations.delete(key);
     for (let i = this.actionQueue.length - 1; i >= 0; i--) {
@@ -414,6 +416,11 @@ export class DataHandler {
   }
 
   // ======================== 具体驱动函数 ========================
+
+  /** 若轴值已定义则赋值（x/y/z 逐轴判断的公共逻辑；"未给轴保持现状"的局部覆盖语义）*/
+  _setAxis(obj, axis, v) {
+    if (v !== undefined) obj[axis] = v;
+  }
 
   /** 按设备 id 查找 Three.js 模型对象（匹配 userData.id） */
   findModelById(id) {
@@ -445,18 +452,18 @@ export class DataHandler {
     });
   }
 
-  /** 更新模型位置（x-y-z 三维） */
+  /** 更新模型位置（x-y-z 三维，只改给定的轴） */
   applyPosition(model, pos) {
-    if (pos.x !== undefined) model.position.x = pos.x;
-    if (pos.y !== undefined) model.position.y = pos.y;
-    if (pos.z !== undefined) model.position.z = pos.z;
+    this._setAxis(model.position, "x", pos.x);
+    this._setAxis(model.position, "y", pos.y);
+    this._setAxis(model.position, "z", pos.z);
   }
 
-  /** 更新模型旋转（x-y-z 三维） */
+  /** 更新模型旋转（x-y-z 三维，只改给定的轴） */
   applyRotation(model, rot) {
-    if (rot.x !== undefined) model.rotation.x = rot.x;
-    if (rot.y !== undefined) model.rotation.y = rot.y;
-    if (rot.z !== undefined) model.rotation.z = rot.z;
+    this._setAxis(model.rotation, "x", rot.x);
+    this._setAxis(model.rotation, "y", rot.y);
+    this._setAxis(model.rotation, "z", rot.z);
   }
 
   /** 根据零件数据更新模型的子部件位置/旋转/缩放（瞬间）*/
@@ -473,21 +480,21 @@ export class DataHandler {
 
       if (transforms.position) {
         const p = transforms.position;
-        if (p.x !== undefined) part.position.x = p.x;
-        if (p.y !== undefined) part.position.y = p.y;
-        if (p.z !== undefined) part.position.z = p.z;
+        this._setAxis(part.position, "x", p.x);
+        this._setAxis(part.position, "y", p.y);
+        this._setAxis(part.position, "z", p.z);
       }
       if (transforms.rotation) {
         const r = transforms.rotation;
-        if (r.x !== undefined) part.rotation.x = r.x;
-        if (r.y !== undefined) part.rotation.y = r.y;
-        if (r.z !== undefined) part.rotation.z = r.z;
+        this._setAxis(part.rotation, "x", r.x);
+        this._setAxis(part.rotation, "y", r.y);
+        this._setAxis(part.rotation, "z", r.z);
       }
       if (transforms.scale) {
         const s = transforms.scale;
-        if (s.x !== undefined) part.scale.x = s.x;
-        if (s.y !== undefined) part.scale.y = s.y;
-        if (s.z !== undefined) part.scale.z = s.z;
+        this._setAxis(part.scale, "x", s.x);
+        this._setAxis(part.scale, "y", s.y);
+        this._setAxis(part.scale, "z", s.z);
       }
     }
   }

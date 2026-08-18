@@ -14,7 +14,7 @@
 ## 特性
 
 - **数据源中立**：后端只认 TCP 协议，仿真器 / MQTT / 任意连接器即插即用，后端零改动。
-- **微服务部署**：`docker-compose` 编排 6 个独立服务，Redis Pub/Sub 作事件总线解耦采集与展示。
+- **微服务部署**：`docker-compose` 编排 5 个独立服务（redis / influxdb3 / explorer / backend / frontend），Redis Pub/Sub 作事件总线解耦采集与展示。
 - **实时孪生**：Three.js + WebSocket，状态 / 动作双通道动画；断线指数退避重连 + 心跳保活。
 - **时序可溯**：InfluxDB 3 旁路存储，前端「场景绑定看板」把图表数据绑到具体孪生体。
 - **健壮通信**：TCP keepalive 探死链、WS 可选鉴权、生产/消费解耦，单点故障不拖垮全链。

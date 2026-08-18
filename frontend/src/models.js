@@ -46,6 +46,7 @@ function setupModelInstance(model, options) {
     div.style.border = "1px solid #00aaff";
 
     const labelObj = new CSS2DObject(div);
+    // 标签相对模型顶部的抬升高度（场景单位），默认 0.5
     const labelOffset = options.labelOffset ?? 0.5;
 
     // 获取模型在世界空间中的包围盒
@@ -55,7 +56,7 @@ function setupModelInstance(model, options) {
       worldBox.max.y,               // 世界坐标系下的最高点
       (worldBox.min.z + worldBox.max.z) / 2
     );
-    worldTopCenter.y += 0.5;
+    worldTopCenter.y += labelOffset;
     model.worldToLocal(worldTopCenter);
     labelObj.position.copy(worldTopCenter);
 
@@ -136,7 +137,7 @@ export function createInstanceFromTemplate(template, options) {
 /**
  * 从 URL 加载 DXF 图纸，解析为合并的 LineSegments + 透明点击面
  * @param {THREE.Scene} scene
- * @param {string} url    图纸 URL（如 /models/layout.dxf）
+ * @param {string} url    图纸 URL（如 /models/xxx.dxf）
  * @param {object} options  { label, position, rotateX }
  * @returns {Promise<THREE.Group>}
  */

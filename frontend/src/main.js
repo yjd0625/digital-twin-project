@@ -1,17 +1,15 @@
 import * as THREE from "three";
-import { createScene, USE_OUTLINE } from "./scene.js";
-import { loadGLTFTemplate, createInstanceFromTemplate, loadDXFModel } from "./models.js";
+import { createScene } from "./scene.js";
+import { loadGLTFTemplate, createInstanceFromTemplate } from "./models.js";
 import { DataHandler } from "./data_handler.js";
 import { setupUI } from "./ui.js";
-import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { initInteraction } from "./interaction.js";
 import { initImporter } from "./importer.js";
 import { initHistoryPanel } from "./history_panel.js";
 
 // ======================== 场景初始化 ========================
-console.clear();  // 清空控制台
 const container = document.body;
-const { scene, camera, renderer, labelRenderer, controls, composer, outlinePass } = createScene(container);
+const { scene, camera, renderer, labelRenderer, controls } = createScene(container);
 
 // ======================== 左下角固定坐标轴 ========================
 const axisScene = new THREE.Scene();
@@ -113,16 +111,7 @@ async function loadAllModels() {
     }
   }
 
-  // --- DXF 产线布局图 ---
-  // try {
-  //   const startTime = performance.now();
-  //   const layout = await loadDXFModel(scene, "/models/layout.dxf", { position: [0, 0, 10], scale: 0.001 });
-  //   const endTime = performance.now();
-  //   if (import.meta.env.DEV) {
-  //     console.log(`DXF loaded: (${(endTime - startTime).toFixed(2)} ms)`);
-  //   }
-  //   if (layout) allModelInstances.push(layout);
-  // } catch(e) { console.warn("DXF layout load failed:", e); }
+  // --- DXF 产线布局图（当前未启用；启用时用 loadDXFModel(scene, "/models/layout.dxf", ...)）---
 
   return allModelInstances;
 }
@@ -153,10 +142,6 @@ function connectWebSocket() {
     if (typeof data === "string") {
       try { data = JSON.parse(data); } catch (e) { /* 保持原样，交给 process 判断 */ }
     }
-    // 诊断日志：确认收到的真实类型与 type 字段（排查时看这一行）
-    console.log("[WS] onmessage → typeof=" + typeof data +
-      " | type=" + ((data && data.type) || "(none)") +
-      " | raw=" + String(event.data).slice(0, 200));
     try { if (dataHandler) dataHandler.process(data); }    // 加载完成前不处理数据
     catch (e) { console.error(e); }
   };
@@ -275,10 +260,9 @@ loadAllModels()
       onCreateModel: onCreateModel,
       scene: scene
     });
-    dataHandler.objects.cube = instances[0];
     dataHandler.onResetRequested = resetAll;   // 后端 "reset" 消息触发前端复位
     const ctx = { scene, camera, controls, renderer, labelRenderer, allModelInstances, dataHandler };
-    interaction = initInteraction(ctx, importer, outlinePass);
+    interaction = initInteraction(ctx, importer);
 
     // 历史数据面板（从后端 /api/history 读 InfluxDB 时序，零依赖 SVG 折线图）
     initHistoryPanel({
@@ -345,10 +329,6 @@ window.addEventListener("resize", function() {
   const h = container.clientHeight || window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
-  if (USE_OUTLINE && composer) {
-    composer.setSize(w, h);
-    if (outlinePass) outlinePass.resolution.set(w, h);
-  }
 });
 
 // ======================== 主渲染循环 ========================
@@ -363,8 +343,7 @@ function animate() {
   if (interaction) interaction.updateSelectionBoxes();    // 选中框跟随动画中的模型
   _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
   axisCam.position.copy(_offset); axisCam.lookAt(0, 0, 0);
-  if (USE_OUTLINE && composer && outlinePass && outlinePass.selectedObjects.length > 0) composer.render(delta);
-  else renderer.render(scene, camera);
+  renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   axisRenderer.render(axisScene, axisCam);
 }

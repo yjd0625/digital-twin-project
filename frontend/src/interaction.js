@@ -1,10 +1,9 @@
 import * as THREE from "three";
-import { USE_OUTLINE } from "./scene.js";
 /**
  * 交互模块 — 模型选择、拖拽移动、键盘快捷键（旋转/缩放/删除）
  */
 
-export function initInteraction(ctx, importer, outlinePass) {
+export function initInteraction(ctx, importer) {
   const { scene, camera, controls, renderer, allModelInstances, dataHandler } = ctx;
 
   // ======================== 选择状态 ========================
@@ -16,6 +15,8 @@ export function initInteraction(ctx, importer, outlinePass) {
   let _ptrDown = { x: 0, y: 0 };
   const MOVE_STEP = 0.1;
   const ROT_STEP = Math.PI / 12;
+  // 点击 vs 拖拽判定阈值（像素）；用平方比较省去开方
+  const DRAG_THRESHOLD_PX = 5;
   const _dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let _ctrlDown = false;
 
@@ -23,7 +24,7 @@ export function initInteraction(ctx, importer, outlinePass) {
   let selectionBoxes = {};
 
   // Ctrl 键释放时清除状态（表单元素聚焦时忽略，避免历史面板下拉框操作干扰）
-  document.addEventListener("keyup", function _keyup(e) {
+  document.addEventListener("keyup", function onKeyUp(e) {
     if (isFormTarget(e)) return;
     if (e.key === "Control") _ctrlDown = false;
   });
@@ -35,11 +36,6 @@ export function initInteraction(ctx, importer, outlinePass) {
       if (idx >= 0) {
         const box = selectionBoxes[obj.id];
         if (box) { scene.remove(box); delete selectionBoxes[obj.id]; }
-        // 根据配置移除高亮轮廓
-        if (USE_OUTLINE && outlinePass) {
-          const idx2 = outlinePass.selectedObjects.indexOf(obj);
-          if (idx2 >= 0) outlinePass.selectedObjects.splice(idx2, 1);
-        }
         selectedObjects.splice(idx, 1);
         return;
       }
@@ -48,18 +44,14 @@ export function initInteraction(ctx, importer, outlinePass) {
       deselectAll();
       selectedObjects.push(obj);
     }
-    if (USE_OUTLINE && outlinePass) {
-      if (!outlinePass.selectedObjects.includes(obj)) outlinePass.selectedObjects.push(obj);
-    }else {let bx = new THREE.BoxHelper(obj, 0x00ff00);
-          bx.update();
-          scene.add(bx);
-          selectionBoxes[obj.id] = bx;
-    }
+    const bx = new THREE.BoxHelper(obj, 0x00ff00);
+    bx.update();
+    scene.add(bx);
+    selectionBoxes[obj.id] = bx;
   }
   function deselectAll() {
     for (let k in selectionBoxes) { scene.remove(selectionBoxes[k]); }
     selectionBoxes = {};
-    if (USE_OUTLINE && outlinePass) outlinePass.selectedObjects = [];
     selectedObjects.length = 0;
   }
 
@@ -67,30 +59,34 @@ export function initInteraction(ctx, importer, outlinePass) {
     for (let k in selectionBoxes) selectionBoxes[k].update();
   }
 
+  /** 点击拾取：返回光标下第一个模型实例（命中子 mesh 时回溯到根节点），未命中返回 null */
+  function pickModel() {
+    if (!allModelInstances.length) return null;
+    const hits = _raycaster.intersectObjects(allModelInstances, true);
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node && !allModelInstances.includes(node)) node = node.parent;
+    return node;
+  }
+
   // ======================== 点击检测（选中/取消选中）=======================
-  renderer.domElement.addEventListener("pointerdown", function _pd1(e) {
+  renderer.domElement.addEventListener("pointerdown", function onCanvasPointerDown(e) {
     _ptrDown.x = e.clientX; _ptrDown.y = e.clientY;
     importer.cancelViewTransition(); // 用户操作打断视角动画
   });
 
-  renderer.domElement.addEventListener("pointerup", function _pu1(e) {
+  renderer.domElement.addEventListener("pointerup", function onCanvasPointerUp(e) {
     let dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
-    if (Math.sqrt(dx * dx + dy * dy) > 5) return; // 是拖拽，不是点击
-    if (!allModelInstances.length) return;
+    if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return; // 是拖拽，不是点击
 
     let rect = renderer.domElement.getBoundingClientRect();
     _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     _raycaster.setFromCamera(_mouse, camera);
 
-    let hit = false;
-    for (let i = 0; i < allModelInstances.length; i++) {
-      if (_raycaster.intersectObject(allModelInstances[i], true).length > 0) {
-        selectObject(allModelInstances[i], _ctrlDown);
-        hit = true; break;
-      }
-    }
-    if (!hit) deselectAll();
+    const model = pickModel();
+    if (model) selectObject(model, _ctrlDown);
+    else deselectAll();
   });
 
   // ======================== 键盘快捷键 ========================
@@ -117,7 +113,7 @@ export function initInteraction(ctx, importer, outlinePass) {
   KEY_ACTIONS["["] = function(o) { let s = o.scale.x * 0.9; o.scale.set(s, s, s); };
   KEY_ACTIONS["]"] = function(o) { let s = o.scale.x * 1.1; o.scale.set(s, s, s); };
 
-  document.addEventListener("keydown", function _kd(e) {
+  document.addEventListener("keydown", function onKeyDown(e) {
     if (isFormTarget(e)) return;   // 表单元素聚焦时不响应模型快捷键
     if (e.key === "Control") { _ctrlDown = true; return; }
     if (e.shiftKey) return; // Shift 按住时屏蔽快捷键，避免干扰拖拽
@@ -152,7 +148,7 @@ export function initInteraction(ctx, importer, outlinePass) {
   });
 
   // ======================== Shift + 左键拖拽移动 ========================
-  renderer.domElement.addEventListener("pointerdown", function _pd2(e) {
+  renderer.domElement.addEventListener("pointerdown", function onShiftDragPointerDown(e) {
     if (e.shiftKey) {
       if (!selectedObjects.length) {
         // 自动选中光标下的模型
@@ -160,12 +156,8 @@ export function initInteraction(ctx, importer, outlinePass) {
         _mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
         _mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         _raycaster.setFromCamera(_mouse, camera);
-        for (let mi = 0; mi < allModelInstances.length; mi++) {
-          if (_raycaster.intersectObject(allModelInstances[mi], true).length > 0) {
-            selectObject(allModelInstances[mi], _ctrlDown);
-            break;
-          }
-        }
+        const model = pickModel();
+        if (model) selectObject(model, _ctrlDown);
       }
       if (selectedObjects.length) {
         isDragging = true;
@@ -175,7 +167,7 @@ export function initInteraction(ctx, importer, outlinePass) {
     }
   });
 
-  renderer.domElement.addEventListener("pointermove", function _pm(e) {
+  renderer.domElement.addEventListener("pointermove", function onPointerMove(e) {
     if (!isDragging || !selectedObjects.length) return;
     let rect = renderer.domElement.getBoundingClientRect();
     _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -191,7 +183,7 @@ export function initInteraction(ctx, importer, outlinePass) {
     }
   });
 
-  document.addEventListener("pointerup", function _pu2() {
+  document.addEventListener("pointerup", function onGlobalPointerUp() {
     if (isDragging) {
       isDragging = false;
       controls.enabled = true;

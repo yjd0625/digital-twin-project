@@ -26,6 +26,13 @@ services:
     networks:
       - dt-net
     restart: unless-stopped
+    # 健康检查：redis:7 镜像自带 redis-cli；backend 对 Redis 未就绪有容错，
+    # 这里仅提供可观测性（docker compose ps 显示 healthy），不强制 depends_on 等待
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # ---------- 时序数据库 ----------
   influxdb3:

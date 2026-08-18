@@ -328,8 +328,9 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
   }
 
   let autoTimer = null;
+  const AUTO_REFRESH_MS = 10000;   // 自动刷新周期（10s）
   panel.querySelector("#hp-auto").addEventListener("change", (e) => {
-    if (e.target.checked) autoTimer = setInterval(() => { refresh(); refreshCards(); }, 10000);
+    if (e.target.checked) autoTimer = setInterval(() => { refresh(); refreshCards(); }, AUTO_REFRESH_MS);
     else if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
   });
 

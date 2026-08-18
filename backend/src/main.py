@@ -108,7 +108,7 @@ async def source_read_loop() -> None:
                 # 按字节对齐消费已解析的前缀（raw_decode 返回的 end 是字符索引，已含前导空白）
                 consumed = text[:end].encode(DATA_ENCODING)
                 byte_buffer = byte_buffer[len(consumed):]
-                logger.info("Received from source: %s", text[start:end])
+                logger.debug("Received from source: %s", text[start:end])
                 parsed = processor.parse(text[start:end])
                 # 缓存最近一次 state 快照：前端加载完成后可经 /api/state 拉取全量同步
                 if parsed.get("type") == "state":
@@ -173,7 +173,8 @@ async def lifespan(app: FastAPI):
     await bus.connect()
     # 1.5) 连接时序数据库（可选；未启用或连接失败均不致命）
     if INFLUXDB_ENABLED:
-        influx_writer.connect()
+        # InfluxDBClient3 构造含网络握手，放线程执行避免阻塞事件循环
+        await asyncio.to_thread(influx_writer.connect)
     # 2) 订阅：source/state → 广播前端（单向；无 command 订阅）
     await bus.subscribe(TOPIC_SOURCE_STATE, on_state_message)
     # 3) 采集端：读数据源 → 发布 source/state
@@ -208,10 +209,13 @@ app = FastAPI(
 )
 
 # 允许前端（如 Vite 开发服务器）跨域调用 REST / 建立 WebSocket
+# 注意：allow_origins=["*"] 时 allow_credentials 必须为 false——
+# 浏览器规范禁止"带凭据 + 通配来源"组合（allow_credentials=True + "*" 是无效且反模式）。
+# demo 前端无 Cookie/凭据需求；生产若需凭据，应改为显式 origin 白名单 + allow_credentials=True。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

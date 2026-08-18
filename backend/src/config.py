@@ -1,16 +1,33 @@
 """全局配置项：端口、IP、日志级别等"""
 import os
 
+# 可选加载项目根 .env（python-dotenv 未安装时静默跳过，不阻塞启动）。
+# 优先级：进程环境变量 > .env 文件 > 下方默认值。
+try:
+    from dotenv import load_dotenv
+    load_dotenv()   # 从当前工作目录（backend/）向上查找 .env
+except ImportError:
+    pass
+
+
+def _env_int(name: str, default: int) -> int:
+    """读取整数环境变量；非法值回退默认（避免启动时因配置写错而崩溃）"""
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 # === 数据源 TCP 连接（Source，默认 Python 演示仿真器）===
 SOURCE_HOST = os.getenv("SOURCE_HOST", "127.0.0.1")
-SOURCE_PORT = int(os.getenv("SOURCE_PORT", "30000"))
-SOURCE_BUFFER_SIZE = 1024
+SOURCE_PORT = _env_int("SOURCE_PORT", 30000)
+SOURCE_BUFFER_SIZE = _env_int("SOURCE_BUFFER_SIZE", 1024)
 
 # === HTTP / WebSocket（FastAPI 统一托管，共用同一端口）===
 HTTP_HOST = os.getenv("HTTP_HOST", "0.0.0.0")
 # 注意：Docker/WSL 会预留 7903-8202 等端口区间（WinError 10013），
 # 默认避开这些区间选用 8300；如想换回 8000 需先从排除区间释放端口。
-HTTP_PORT = int(os.getenv("HTTP_PORT", "8300"))
+HTTP_PORT = _env_int("HTTP_PORT", 8300)
 # 前端 WebSocket 路由路径；浏览器连接串为 ws://<HTTP_HOST>:<HTTP_PORT><WS_PATH>
 WS_PATH = os.getenv("WS_PATH", "/ws")
 # WebSocket 可选鉴权：非空时才校验。前端连接需带 ?token=<WS_TOKEN> 或
@@ -22,12 +39,12 @@ WS_TOKEN = os.getenv("WS_TOKEN", "")
 # 业务代码（main.py / source_read_loop / WebSocketHandler）无需改动。
 BUS_TYPE = os.getenv("BUS_TYPE", "redis")
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+REDIS_PORT = _env_int("REDIS_PORT", 6379)
+REDIS_DB = _env_int("REDIS_DB", 0)
 # 老版 Redis（如 Windows 移植版 3.x）不支持 RESP3 的 HELLO 命令，
 # 而 redis-py>=5 默认协商 RESP3，会因 "unknown command 'HELLO'" 报错，
 # 故强制使用 RESP2。若你的 Redis>=6 且想用 RESP3，可设 REDIS_PROTOCOL=3。
-REDIS_PROTOCOL = int(os.getenv("REDIS_PROTOCOL", "2"))
+REDIS_PROTOCOL = _env_int("REDIS_PROTOCOL", 2)
 
 # === 消息主题（MQTT 风格斜杠层级；Redis 视为普通 channel 名，切 MQTT 时主题名可直接复用）===
 # 实时状态：数据源(后端采集端) -> 发布 source/state -> Redis -> 订阅端 -> 前端 WS。
@@ -41,7 +58,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE = os.getenv("LOG_FILE", "logs/backend.log")
 
 # === 数据格式 ===
-DATA_ENCODING = "utf-8"
+DATA_ENCODING = os.getenv("DATA_ENCODING", "utf-8")
 
 # === 时序数据库（InfluxDB 3 Core，可选，best-effort 旁路写入）===
 # 启用后，后端在 source_read_loop 解析到 state/action 时，旁路写入 InfluxDB。
@@ -56,3 +73,15 @@ INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")
 INFLUXDB_DATABASE = os.getenv("INFLUXDB_DATABASE", "digital_twin")
 INFLUXDB_MEASUREMENT_STATE = os.getenv("INFLUXDB_MEASUREMENT_STATE", "station_state")
 INFLUXDB_MEASUREMENT_ACTION = os.getenv("INFLUXDB_MEASUREMENT_ACTION", "station_action")
+
+# 供 `from .config import *` 使用的白名单（避免隐式导出内部辅助函数 _env_int）
+__all__ = [
+    "SOURCE_HOST", "SOURCE_PORT", "SOURCE_BUFFER_SIZE",
+    "HTTP_HOST", "HTTP_PORT", "WS_PATH", "WS_TOKEN",
+    "BUS_TYPE", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PROTOCOL",
+    "TOPIC_SOURCE_STATE",
+    "LOG_LEVEL", "LOG_FILE",
+    "DATA_ENCODING",
+    "INFLUXDB_ENABLED", "INFLUXDB_URL", "INFLUXDB_TOKEN", "INFLUXDB_DATABASE",
+    "INFLUXDB_MEASUREMENT_STATE", "INFLUXDB_MEASUREMENT_ACTION",
+]

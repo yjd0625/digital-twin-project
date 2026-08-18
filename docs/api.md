@@ -89,7 +89,7 @@
 
 ## TCP Socket（数据源通信）
 
-后端作为 **TCP 客户端**连接数据源；数据源（默认 Python 实时仿真器）作为 **TCP 服务端**监听 `host:30000`（后端经 `host.docker.internal:30000` 访问宿主上的数据源，断线每 3s 自动重连）。
+后端作为 **TCP 客户端**连接数据源；数据源（默认 Python 实时仿真器）作为 **TCP 服务端**监听 `host:30000`（后端经 `host.docker.internal:30000` 访问宿主上的数据源，断线指数退避自动重连（3s→6s→…封顶 30s））。
 
 数据格式：多个 JSON 信封**直接拼接发送、不带换行/分隔符**，UTF-8 编码；信封 `type ∈ {create, state, action, reset, attach, detach}`。完整帧编码与信封 schema 见 `docs/CONNECTOR.md`。
 
@@ -100,7 +100,7 @@
 - **启用**：设环境变量 `INFLUXDB_ENABLED=true`（默认 false）。鉴权时设 `INFLUXDB_TOKEN`。其余见 `backend/src/config.py`（`INFLUXDB_*` 项）。
 - **建库**：`influxdb3 create database digital_twin`（measurement 首写自动创建，无需预建表）。
 - **两张表（measurement）**：
-  - `station_state`（`type=state`，每帧 30Hz）：tag `station_id` + `part_name`；field `pos_x/y/z`、`rot_x/y/z`、`scale_x/y/z`、`temp`、`simulationTime`、`received_at`、`simulate_speed`。
+  - `station_state`（`type=state`，默认每帧 20Hz）：tag `station_id` + `part_name`；field `pos_x/y/z`、`rot_x/y/z`、`scale_x/y/z`、`temp`、`simulationTime`、`received_at`、`simulate_speed`。
   - `station_action`（`type=action`，事件）：tag 同上；field 同上 + `rot_speed`/`pos_speed`/`scale_speed`（通道速度）。
 - **两个时刻**：Point 的 `time` = 实际接收时刻（保证时序正确）；`simulationTime` 作为 field 记录仿真内部时钟（action 兼容旧字段名 `timestamp`）。
 - **部分写入**：只写数据中出现的维度/轴，缺失的不写（InfluxDB field 不可为 null）。

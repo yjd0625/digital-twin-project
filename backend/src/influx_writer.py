@@ -108,52 +108,33 @@ class InfluxWriter:
 
     # ---- 映射：state（每帧，来自 Plant type=state）----
     def state_to_points(self, parsed):
-        from influxdb_client_3 import Point
-        points = []
-        sim_time = _as_float(parsed.get("simulationTime", parsed.get("timestamp")))
-        simulate_speed = _as_float(parsed.get("simulateSpeed"))
-        received_at = time.time()
-        ts = datetime.now(timezone.utc)
-        for station in parsed.get("stations", []):
-            sid = station.get("id")
-            temp = _as_float(station.get("temp"))
-            for part_name, transform in station.get("parts", {}).items():
-                p = (Point(self.measurement_state)
-                     .tag("station_id", str(sid))
-                     .tag("part_name", str(part_name))
-                     .time(ts))
-                p = _add_vec(p, "pos", transform.get("position"))
-                p = _add_vec(p, "rot", transform.get("rotation"))   # 不含 angle（按约定去掉）
-                p = _add_vec(p, "scale", transform.get("scale"))
-                if temp is not None:
-                    p = p.field("temp", temp)
-                if sim_time is not None:
-                    p = p.field("simulationTime", sim_time)
-                p = p.field("received_at", received_at)
-                if simulate_speed is not None:
-                    p = p.field("simulate_speed", simulate_speed)
-                points.append(p)
-        return points
+        return self._to_points(parsed, self.measurement_state, with_speed=False)
 
     # ---- 映射：action（事件，来自 Plant type=action）----
     def action_to_points(self, parsed):
+        return self._to_points(parsed, self.measurement_action, with_speed=True)
+
+    # ---- 统一映射：state/action 的差异仅在 measurement 与是否写通道 speed，参数化合并 ----
+    def _to_points(self, parsed, measurement, with_speed=False):
         from influxdb_client_3 import Point
         points = []
         sim_time = _as_float(parsed.get("simulationTime", parsed.get("timestamp")))
         simulate_speed = _as_float(parsed.get("simulateSpeed"))
         received_at = time.time()
         ts = datetime.now(timezone.utc)
-        for cmd in parsed.get("commands", []):
-            sid = cmd.get("id")
-            temp = _as_float(cmd.get("temp"))
-            for part_name, transform in cmd.get("parts", {}).items():
-                p = (Point(self.measurement_action)
+        # state 用 stations[]，action 用 commands[]，结构一致（id + parts{}）
+        entries = parsed.get("stations") or parsed.get("commands") or []
+        for entry in entries:
+            sid = entry.get("id")
+            temp = _as_float(entry.get("temp"))
+            for part_name, transform in entry.get("parts", {}).items():
+                p = (Point(measurement)
                      .tag("station_id", str(sid))
                      .tag("part_name", str(part_name))
                      .time(ts))
-                p = _add_vec(p, "pos", transform.get("position"), with_speed=True)
-                p = _add_vec(p, "rot", transform.get("rotation"), with_speed=True)
-                p = _add_vec(p, "scale", transform.get("scale"), with_speed=True)
+                p = _add_vec(p, "pos", transform.get("position"), with_speed=with_speed)
+                p = _add_vec(p, "rot", transform.get("rotation"), with_speed=with_speed)   # 不含 angle（按约定去掉）
+                p = _add_vec(p, "scale", transform.get("scale"), with_speed=with_speed)
                 if temp is not None:
                     p = p.field("temp", temp)
                 if sim_time is not None:
