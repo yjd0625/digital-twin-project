@@ -114,8 +114,14 @@ export class DataHandler {
 
     // 线速度 / 播放倍率：所有消息类型共享（action 动画也需据此加速）
     if (data.simulateSpeed !== undefined) {
-      this.simulateSpeed = data.simulateSpeed;
-      this.updateSpeed("仿真倍速: " + data.simulateSpeed.toFixed(1));
+      const v = Number(data.simulateSpeed);
+      if (Number.isFinite(v)) {
+        this.simulateSpeed = v;
+        this.updateSpeed("仿真倍速: " + v.toFixed(1));
+      } else {
+        // null / 非数值字符串 / NaN：不中断分发，忽略非法值
+        console.warn("[DataHandler] simulateSpeed 非法值，已忽略:", data.simulateSpeed);
+      }
     }
 
     if (type === "action") {
@@ -228,7 +234,8 @@ export class DataHandler {
   /**
    * 复位时调用：删除所有由 "create" 指令动态创建的模型（初始加载的模型不受影响）。
    * 逆序遍历，安全 splice；从父节点（场景或夹爪）移除并清理查找表。
-   * 注意：克隆体共享蓝图模板的 geometry/material，这里只移除引用、不 dispose，避免影响其他实例。
+   * 注意：克隆体共享蓝图模板的 geometry（只读，不 dispose 是安全的）；材质已按实例克隆
+   * （见 models.js cloneInstanceMaterials），同样不在此 dispose，避免影响其他实例。
    */
   removeCreatedModels() {
     let removed = 0;
@@ -260,10 +267,11 @@ export class DataHandler {
         if (station.status) this.applyStatus(model, station.status);
 
         // 站级整体变换（兼容旧格式，真实数据一般放 parts 里）
-        if (station.position.x !== undefined || station.position.y !== undefined || station.position.z !== undefined) {
+        // 注意：station.position/rotation 可能缺失（后端只给 status/parts），必须先判空再访问
+        if (station.position && (station.position.x !== undefined || station.position.y !== undefined || station.position.z !== undefined)) {
           this.applyPosition(model, station);
         }
-        if (station.rotation.x !== undefined || station.rotation.y !== undefined || station.rotation.z !== undefined) {
+        if (station.rotation && (station.rotation.x !== undefined || station.rotation.y !== undefined || station.rotation.z !== undefined)) {
           this.applyRotation(model, station);
         }
 
@@ -418,12 +426,15 @@ export class DataHandler {
     return part;
   }
 
-  /** 根据运行状态修改模型颜色 */
+  /** 根据运行状态修改模型颜色（实例材质已按实例克隆，改色不会污染同模板其他实例）*/
   applyStatus(model, status) {
     const color = STATUS_COLORS[status] || 0x888888;
     model.traverse(function(ch) {
-      if (ch.isMesh && ch.material && !ch.material.isLineBasicMaterial) {
-        ch.material.color.setHex(color);
+      if (!ch.isMesh || !ch.material) return;
+      // 兼容多材质 mesh（GLB 多材质时 material 为数组）
+      const mats = Array.isArray(ch.material) ? ch.material : [ch.material];
+      for (const m of mats) {
+        if (!m.isLineBasicMaterial) m.color.setHex(color);
       }
     });
   }

@@ -60,7 +60,14 @@ class SourceClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(5.0)  # 设置超时，避免 recv 永久阻塞
         _enable_keepalive(self.sock)
-        self.sock.connect((SOURCE_HOST, SOURCE_PORT))
+        try:
+            self.sock.connect((SOURCE_HOST, SOURCE_PORT))
+        except OSError:
+            # 连接失败必须关闭已创建的 socket，否则每次重连失败都会泄漏 1 个 FD
+            self.sock.close()
+            self.sock = None
+            self._connected = False
+            raise
         self._connected = True
         logger.info("Connected to data source at %s:%s", SOURCE_HOST, SOURCE_PORT)
         return self.sock

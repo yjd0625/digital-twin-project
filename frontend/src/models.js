@@ -104,13 +104,31 @@ export async function loadGLTFTemplate(url) {
 }
 
 /**
+ * 递归克隆 Mesh 的材质（含多材质数组），使各实例颜色/状态独立。
+ *
+ * 背景：THREE.Object3D.clone() 对 geometry/material 是"引用共享"——若直接改写
+ * clone 体的 material.color（如 applyStatus 按状态着色），会污染同模板的所有实例。
+ * 必须在实例化时克隆材质；geometry 仍保持共享（只读数据，无此问题）。
+ */
+function cloneInstanceMaterials(root) {
+  root.traverse(function(child) {
+    if (child.isMesh && child.material) {
+      child.material = Array.isArray(child.material)
+        ? child.material.map(function(m) { return m.clone(); })
+        : child.material.clone();
+    }
+  });
+}
+
+/**
  * 从模板克隆并创建模型实例，应用位置/旋转/标签/阴影等实例级参数
  * @param {THREE.Group} template   - loadGLTFTemplate 返回的原始模型
  * @param {object}      options    - position/rotateX/label/labelOffset/scale
  * @returns {THREE.Group} 已设置好的新实例（未加入 scene，需调用者 add）
  */
 export function createInstanceFromTemplate(template, options) {
-  const model = template.clone();             // 深度克隆，共享 geometry/material
+  const model = template.clone();   // 结构深克隆；geometry/material 默认引用共享
+  cloneInstanceMaterials(model);    // 材质独立化：各实例可单独改色（applyStatus 不再互相污染）
   setupModelInstance(model, options);         // 应用实例级参数
   return model;
 }

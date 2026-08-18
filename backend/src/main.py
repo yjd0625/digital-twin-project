@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, Query
@@ -42,6 +43,14 @@ influx_writer = InfluxWriter()
 # 这样即使一条 JSON 跨多个 TCP 包到达、或被拆成多段，也能正确重组
 _json_decoder = json.JSONDecoder()
 
+# 采集缓冲上限：异常数据流（损坏 JSON / 非 UTF-8 字节）下 buffer 无限制增长会耗尽内存，
+# 超过阈值即断开重连并清空（防御性保护，正常流量远小于此值）
+MAX_BUFFER_BYTES = 1_048_576  # 1 MB
+
+# InfluxDB 旁路写入任务集合：统一跟踪、shutdown 时回收，避免
+# "Task was destroyed but it is pending" 泄漏与任务无限堆积（无背压）
+_influx_tasks: set[asyncio.Task] = set()
+
 
 async def source_read_loop() -> None:
     """采集端后台任务：持续从数据源(Source)读取并发布到总线（断线自动重连）"""
@@ -59,7 +68,11 @@ async def source_read_loop() -> None:
                     logger.warning("数据源未连接，%.1fs 后重试（第 %d 次）...", delay, source._failures)
                     await asyncio.sleep(delay)
                     continue
-            raw = await loop.run_in_executor(None, source.recv, SOURCE_BUFFER_SIZE)
+            try:
+                raw = await loop.run_in_executor(None, source.recv, SOURCE_BUFFER_SIZE)
+            except socket.timeout:
+                # 数据源保持连接但暂时无数据（recv 5s 超时）→ 视为空读取，非错误，不记日志不 sleep
+                continue
             if not raw:
                 # recv 返回空 bytes = 对端已关闭连接
                 logger.warning("数据源连接已关闭，尝试重连...")
@@ -67,6 +80,12 @@ async def source_read_loop() -> None:
                 byte_buffer = b""
                 continue
             byte_buffer += raw
+            # 防御：缓冲超限（连续损坏数据/非 UTF-8 前缀）→ 断开重连并清空，避免内存无限增长
+            if len(byte_buffer) > MAX_BUFFER_BYTES:
+                logger.error("采集缓冲超过 %d 字节（疑似异常数据流），断开重连...", MAX_BUFFER_BYTES)
+                source.close()
+                byte_buffer = b""
+                continue
             # 从缓冲字节中尽可能多地解析出完整 JSON 对象
             while True:
                 try:
@@ -76,22 +95,31 @@ async def source_read_loop() -> None:
                 if not text.strip():
                     byte_buffer = b""
                     break
+                # 跳过前导空白/换行分隔符：raw_decode 必须从 index 0 解析，带空白前缀的完整消息
+                # 会因 ValueError 卡在 buffer 里，直到下一条数据到达才被消费（实时性受损 + buffer 堆积）
+                start = len(text) - len(text.lstrip())
                 try:
-                    obj, end = _json_decoder.raw_decode(text)
+                    obj, end = _json_decoder.raw_decode(text, start)
                 except ValueError:
                     break  # 片段不完整，等待更多数据
-                # 按字节对齐消费已解析的前缀（raw_decode 返回的 end 是字符索引）
+                # 按字节对齐消费已解析的前缀（raw_decode 返回的 end 是字符索引，已含前导空白）
                 consumed = text[:end].encode(DATA_ENCODING)
                 byte_buffer = byte_buffer[len(consumed):]
-                logger.info("Received from source: %s", text[:end])
-                parsed = processor.parse(text[:end])
+                logger.info("Received from source: %s", text[start:end])
+                parsed = processor.parse(text[start:end])
                 # 旁路写入时序数据库（best-effort，不阻塞主流程）
                 if influx_writer.enabled:
                     msg_type = parsed.get("type")
                     if msg_type == "state":
-                        asyncio.create_task(influx_writer.write_state(parsed))
+                        task = asyncio.create_task(influx_writer.write_state(parsed))
                     elif msg_type == "action":
-                        asyncio.create_task(influx_writer.write_action(parsed))
+                        task = asyncio.create_task(influx_writer.write_action(parsed))
+                    else:
+                        task = None
+                    if task is not None:
+                        # 跟踪旁路任务：完成后自动移出集合，shutdown 时统一 cancel/gather
+                        _influx_tasks.add(task)
+                        task.add_done_callback(_influx_tasks.discard)
                 # 解耦点①：不再直接 broadcast，而是发布到 source/state 主题
                 try:
                     await bus.publish(TOPIC_SOURCE_STATE, json.dumps(parsed, ensure_ascii=False))
@@ -148,6 +176,12 @@ async def lifespan(app: FastAPI):
         await task
     except asyncio.CancelledError:
         pass
+    # 回收 InfluxDB 旁路写入任务（避免 "Task was destroyed but it is pending" 泄漏）
+    if _influx_tasks:
+        for t in list(_influx_tasks):
+            t.cancel()
+        await asyncio.gather(*_influx_tasks, return_exceptions=True)
+        _influx_tasks.clear()
     influx_writer.close()
     await bus.close()
     source.close()
