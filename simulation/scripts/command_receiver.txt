@@ -1,5 +1,12 @@
 (*
-  描述: 接收并处理来自 Python 后端的指令
+  [已废弃] 本脚本实现的是旧版 START/STOP/SPEED 指令接收协议。
+  后端已随「断开 Plant 实时架构」移除该控制通道（实时环为单向：数据源 -> 后端 -> 前端，
+  见 backend/src/websocket_handler.py 注释），因此本脚本在现架构下永远不会收到指令，属死代码。
+  若将来需要把推演场景参数发往 Plant Simulation 做预测/推演，请走新的 source/prediction 通道
+  （待开发，见 backend/src/main.py 架构注释），而不是恢复本脚本。
+  保留仅供历史参考，勿再挂接到 Socket 的 OnReceive 事件。
+
+  描述: 接收并处理来自 Python 后端的指令（已废弃，见上方说明）
   在 Socket 的 OnReceive 事件中调用
 *)
 

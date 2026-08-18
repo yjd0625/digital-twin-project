@@ -22,8 +22,9 @@ export function initInteraction(ctx, importer, outlinePass) {
   const selectedObjects = [];
   let selectionBoxes = {};
 
-  // Ctrl 键释放时清除状态
+  // Ctrl 键释放时清除状态（表单元素聚焦时忽略，避免历史面板下拉框操作干扰）
   document.addEventListener("keyup", function _keyup(e) {
+    if (isFormTarget(e)) return;
     if (e.key === "Control") _ctrlDown = false;
   });
 
@@ -93,6 +94,14 @@ export function initInteraction(ctx, importer, outlinePass) {
   });
 
   // ======================== 键盘快捷键 ========================
+  // 表单元素（input/select/textarea/contentEditable）聚焦时忽略快捷键，
+  // 否则历史面板下拉框聚焦时 Delete/方向键会误操作 3D 模型
+  function isFormTarget(e) {
+    const t = e.target;
+    if (!t) return false;
+    return t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable;
+  }
+
   // 按键 → 动作映射表（比 switch 更简洁）
   const KEY_ACTIONS = {};
   KEY_ACTIONS["ArrowUp"]    = function(o) { o.position.x += MOVE_STEP; };
@@ -109,6 +118,7 @@ export function initInteraction(ctx, importer, outlinePass) {
   KEY_ACTIONS["]"] = function(o) { let s = o.scale.x * 1.1; o.scale.set(s, s, s); };
 
   document.addEventListener("keydown", function _kd(e) {
+    if (isFormTarget(e)) return;   // 表单元素聚焦时不响应模型快捷键
     if (e.key === "Control") { _ctrlDown = true; return; }
     if (e.shiftKey) return; // Shift 按住时屏蔽快捷键，避免干扰拖拽
 
@@ -123,6 +133,10 @@ export function initInteraction(ctx, importer, outlinePass) {
         if (idx >= 0) allModelInstances.splice(idx, 1);
         // 从场景中移除
         scene.remove(obj);
+        // 同步移除 dataHandler 的 id→模型 注册表，避免已删对象仍被 state/action 驱动
+        if (dataHandler && obj.userData && obj.userData.id) {
+          dataHandler.modelMap.delete(obj.userData.id);
+        }
       }
       deselectAll();
       return;

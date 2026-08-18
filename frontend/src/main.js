@@ -131,6 +131,8 @@ async function loadAllModels() {
 let ws;
 let reconnectAttempts = 0;   // 连续断线次数，用于指数退避
 let wsPingTimer = null;      // 周期心跳定时器
+// 后端 REST/WS 基址：与后端 HTTP_PORT(8300) 对齐，改成 8300 以外的端口需同步修改
+const API_BASE = `http://${window.location.hostname}:8300`;
 function connectWebSocket() {
   // 用当前页面 host 解析后端地址（兼容 dev 与 Docker 发布两种模式）
   ws = new WebSocket(`ws://${window.location.hostname}:8300/ws`);
@@ -168,10 +170,6 @@ function connectWebSocket() {
   };
   ws.onerror = function(e) { console.error("WS error:", e); };
 }
-function sendCommand(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) { ws.send(msg); }
-  else { alert("WebSocket 未连接"); }
-}
 
 // ======================== 标签显隐切换 ========================
 let _labelsVisible = false;   // 默认不显示设备标签
@@ -203,7 +201,7 @@ function resetAll() {
   if (dataHandler) dataHandler.clearActions();
   if (interaction) interaction.deselectAll();
 }
-const ui = setupUI(controls, sendCommand, { onView: importer.setView, onReset: resetAll, onToggleLabels: toggleLabels });
+const ui = setupUI(controls, { onView: importer.setView, onReset: resetAll, onToggleLabels: toggleLabels });
 let dataHandler = null;
 let interaction = null;
 
@@ -298,31 +296,46 @@ loadAllModels()
       },
     });
 
-    const allBox = new THREE.Box3().setFromObject(scene);
+    const allBox = new THREE.Box3();
+    // 只统计模型实例，排除 GridHelper/灯光/标签等辅助对象（它们会放大包围盒、把相机推远）
+    for (const m of allModelInstances) allBox.expandByObject(m);
     const size = allBox.getSize(new THREE.Vector3());
     const center = allBox.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
     console.log("Scene size:", size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
-    const dist = Math.min(Math.max(maxDim * 0.4, 5), 300);
+    // 视距经验系数：0.4×最大尺寸，夹在 [5, 300] 之间
+    const VIEW_DIST_SCALE = 0.4, VIEW_DIST_MIN = 5, VIEW_DIST_MAX = 300;
+    const dist = Math.min(Math.max(maxDim * VIEW_DIST_SCALE, VIEW_DIST_MIN), VIEW_DIST_MAX);
     camera.position.set(-dist * 0.1 + 5, dist * 0.6, dist);
-    controls.target.set(center.x + 15, center.y, center.z);
+    controls.target.set(center.x, center.y, center.z);
     controls.update();
     // 捕获加载后的默认姿态作为复位基线（纯内存）
     importer.saveDefaultTransforms();
     // 应用标签初始显隐（默认不显示设备标签）
     applyLabelsVisibility();
-    // TODO: 向后端请求当前全量状态并应用到各设备/零件：
-    //   const state = await fetchDeviceStateFromBackend();
-    //   applyStateToModels(state);  // 按 userData.id 将后端数据映射到设备/零件
-    // 当前保持加载后的默认状态，不做后端同步
+    // 加载完成后主动拉取后端最近一次 state 快照并应用，
+    // 补偿加载窗口内 WebSocket 消息被丢弃导致的初始状态丢失
+    fetch(`${API_BASE}/api/state`)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resp) {
+        if (resp && resp.state && dataHandler) {
+          dataHandler.process(resp.state);
+          console.log("[sync] 已应用加载后拉取的全量 state 快照");
+        } else {
+          console.log("[sync] 后端暂无 state 快照（数据源尚未推送）");
+        }
+      })
+      .catch(function(e) { console.warn("[sync] 拉取全量 state 失败（可忽略，等待实时推送）:", e); });
     console.log("All models loaded:", instances.length);
   })
   .catch(function(e) { console.warn("Model loading failed:", e); });
 
 // ======================== 全局错误捕获（控制台显示在 #info）========================
 window.addEventListener("error", function(e) {
+  // 只更新文本、不覆盖背景：背景颜色由 updateInfo 管理（连接状态语义），
+  // 避免 JS 错误后状态栏一直保持红色、误导状态判断
   const info = document.getElementById("info");
-  if (info) { info.textContent = "JS Error: " + (e.message || e.error); info.style.background = "rgba(200,0,0,0.8)"; }
+  if (info) info.textContent = "JS Error: " + (e.message || e.error);
   console.error("Global error:", e);
 });
 
@@ -347,6 +360,7 @@ function animate() {
   controls.update();
   importer.updateViewTransition(delta);
   if (dataHandler) dataHandler.updateAnimations(delta);   // 推进动作指令动画
+  if (interaction) interaction.updateSelectionBoxes();    // 选中框跟随动画中的模型
   _offset.copy(camera.position).normalize().multiplyScalar(axisDist);
   axisCam.position.copy(_offset); axisCam.lookAt(0, 0, 0);
   if (USE_OUTLINE && composer && outlinePass && outlinePass.selectedObjects.length > 0) composer.render(delta);

@@ -51,6 +51,9 @@ MAX_BUFFER_BYTES = 1_048_576  # 1 MB
 # "Task was destroyed but it is pending" 泄漏与任务无限堆积（无背压）
 _influx_tasks: set[asyncio.Task] = set()
 
+# 最近一次收到的 state 快照：供前端在模型加载完成后主动拉取（补偿加载期丢失的初始状态）
+_latest_state: dict | None = None
+
 
 async def source_read_loop() -> None:
     """采集端后台任务：持续从数据源(Source)读取并发布到总线（断线自动重连）"""
@@ -65,7 +68,7 @@ async def source_read_loop() -> None:
                     byte_buffer = b""   # 重连后清空，避免旧数据混入新会话
                 except OSError:
                     delay = source.next_backoff()  # 指数退避 + 抖动（封顶 30s）
-                    logger.warning("数据源未连接，%.1fs 后重试（第 %d 次）...", delay, source._failures)
+                    logger.warning("数据源未连接，%.1fs 后重试（第 %d 次）...", delay, source.failures)
                     await asyncio.sleep(delay)
                     continue
             try:
@@ -107,6 +110,9 @@ async def source_read_loop() -> None:
                 byte_buffer = byte_buffer[len(consumed):]
                 logger.info("Received from source: %s", text[start:end])
                 parsed = processor.parse(text[start:end])
+                # 缓存最近一次 state 快照：前端加载完成后可经 /api/state 拉取全量同步
+                if parsed.get("type") == "state":
+                    _latest_state = parsed
                 # 旁路写入时序数据库（best-effort，不阻塞主流程）
                 if influx_writer.enabled:
                     msg_type = parsed.get("type")
@@ -160,6 +166,9 @@ async def lifespan(app: FastAPI):
         filemode="a",
     )
     logger.info("Backend starting: HTTP/WS on http://%s:%s", HTTP_HOST, HTTP_PORT)
+    # 清空上一轮快照（重启后重新积累）
+    global _latest_state
+    _latest_state = None
     # 1) 连接消息总线（Redis 暂不可用也不致命，publish 会按需自动重连）
     await bus.connect()
     # 1.5) 连接时序数据库（可选；未启用或连接失败均不致命）
@@ -171,6 +180,9 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(source_read_loop())
     yield
     # 关闭阶段
+    # 先关闭 socket：让采集循环中阻塞在 recv（最多 5s 超时）的调用立即返回，
+    # 避免 cancel 后 await task 空等线程返回导致的服务关闭延迟。
+    source.close()
     task.cancel()
     try:
         await task
@@ -184,7 +196,6 @@ async def lifespan(app: FastAPI):
         _influx_tasks.clear()
     influx_writer.close()
     await bus.close()
-    source.close()
     logger.info("Server shut down.")
 
 
@@ -222,6 +233,16 @@ async def ws_endpoint(websocket: WebSocket):
             await websocket.close(code=1008, reason="unauthorized")
             return
     await handler.handle_client(websocket)
+
+
+@app.get("/api/state", tags=["数据"], summary="最近一次全量状态快照")
+async def api_state():
+    """返回后端最近一次收到的 state 消息（部分覆盖语义的累积视角）。
+
+    前端在模型加载完成后调用此接口拉取一次，补偿「加载窗口内 WebSocket 消息被丢弃」
+    导致的初始状态丢失；尚未收到任何 state 时返回 {"state": null}。
+    """
+    return {"state": _latest_state}
 
 
 @app.get("/api/history", tags=["数据"], summary="查询设备历史时序（来自 InfluxDB）")

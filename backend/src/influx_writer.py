@@ -10,6 +10,7 @@
 """
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -57,8 +58,21 @@ class InfluxWriter:
         self.measurement_state = config.INFLUXDB_MEASUREMENT_STATE
         self.measurement_action = config.INFLUXDB_MEASUREMENT_ACTION
         self.client = None
-        self.write_count = 0
-        self.last_error = None
+        # write_count / last_error 在线程中（to_thread 的 _write）写入、事件循环中（/status）读取，
+        # 用锁保护避免并发读写的语义竞态
+        self._lock = threading.Lock()
+        self._write_count = 0
+        self._last_error = None
+
+    @property
+    def write_count(self) -> int:
+        with self._lock:
+            return self._write_count
+
+    @property
+    def last_error(self):
+        with self._lock:
+            return self._last_error
 
     # ---- 生命周期 ----
     def connect(self):
@@ -162,10 +176,12 @@ class InfluxWriter:
             # （实测整批被丢弃或仅写入部分字段），单条 write(record=p) 稳定落库。
             for p in points:
                 self.client.write(p)
-            self.write_count += len(points)
-            self.last_error = None
+            with self._lock:
+                self._write_count += len(points)
+                self._last_error = None
         except Exception as exc:  # noqa: BLE001
-            self.last_error = str(exc)
+            with self._lock:
+                self._last_error = str(exc)
             logger.warning("InfluxDB 写入失败（%d 条）: %s", len(points), exc)
 
     # ---- 异步入口（事件循环侧调用）----

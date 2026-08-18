@@ -175,6 +175,8 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
     renderCards();
   }
   function renderCards() {
+    // 清理所有卡片的旧 ResizeObserver（DOM 即将整体重建，避免观察器持有已移除节点的引用）
+    cards.forEach(function(c) { if (c._ro) { c._ro.disconnect(); c._ro = null; } });
     elCards.innerHTML = "";
     cards.forEach((card, idx) => {
       const el = document.createElement("div");
@@ -192,15 +194,19 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
         cards.splice(idx, 1);
         renderCards();
       });
-      // 尺寸变化时按实际像素重绘（避免文字被拉伸变形）
+      // 尺寸变化时按实际像素重绘（避免文字被拉伸变形）；observer 引用存于 card，删除卡片时随 renderCards 清理
       if (typeof ResizeObserver !== "undefined") {
-        new ResizeObserver(() => { if (card._points) drawChart(chartEl, card._points); }).observe(chartEl);
+        card._ro = new ResizeObserver(() => { if (card._points) drawChart(chartEl, card._points); });
+        card._ro.observe(chartEl);
       }
       fetchCard(card, chartEl);
     });
   }
   async function fetchCard(card, chartEl) {
+    // 卡片级请求序号：仅该卡片最新一次请求生效（防刷新连点时旧结果覆盖新结果）
+    const seq = (card._seq = (card._seq || 0) + 1);
     const pts = await fetchPoints(card.device, card.part, card.field, card.range);
+    if (seq !== card._seq) return;   // 已有更新的请求，丢弃过期结果
     card._points = pts;
     drawChart(chartEl, pts);
   }
@@ -212,7 +218,10 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
   }
 
   // ---- 拉取数据 ----
+  // 请求序号令牌：仅最新一次请求的结果生效，防止慢的旧请求晚到覆盖新结果
+  let _mainSeq = 0;
   async function refresh() {
+    const seq = ++_mainSeq;
     const device = elDevice.value;
     const part = elPart.value;
     if (!device || !part) {
@@ -220,8 +229,10 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
     }
     renderStatus("查询中...");
     const pts = await fetchPoints(device, part, elField.value, elRange.value);
+    if (seq !== _mainSeq) return;   // 已有更新的请求，丢弃本次过期结果
     if (pts === null) { renderEmpty(elChart); return; }
     renderStatus(`聚焦：${device} / ${part} / ${elField.value} · ${pts.length} 点`);
+    _mainPoints = pts;
     drawChart(elChart, pts);
   }
 
@@ -232,11 +243,14 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
       `&range=${encodeURIComponent(range)}`;
     try {
       const res = await fetch(url);
-      const data = await res.json();
+      // 先判 HTTP 状态再解析 JSON（后端可能返回非 JSON 错误页）
       if (!res.ok) {
-        renderStatus("⚠️ " + (data.error || ("HTTP " + res.status)));
+        let errText = "HTTP " + res.status;
+        try { const j = await res.json(); if (j && j.error) errText = j.error; } catch (e) { /* 非 JSON 响应，保留状态码 */ }
+        renderStatus("⚠️ " + errText);
         return null;
       }
+      const data = await res.json();
       return data.points || [];
     } catch (e) {
       renderStatus("⚠️ 请求失败：" + e.message);
@@ -251,13 +265,30 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
   }
   function renderStatus(t) { elStatus.textContent = t; }
 
+  // 大数据量抽稀：超过 MAX_POINTS 时均匀采样（保留末点），控制 SVG 节点数与渲染开销
+  const MAX_POINTS = 800;
+  function decimate(points) {
+    if (points.length <= MAX_POINTS) return points;
+    const step = points.length / MAX_POINTS;
+    const out = [];
+    for (let i = 0; i < points.length; i += step) out.push(points[Math.floor(i)]);
+    if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
+    return out;
+  }
+
   function drawChart(container, points) {
     if (!points || !points.length) { renderEmpty(container); return; }
+    points = decimate(points);
     const W = Math.max(container.clientWidth || 160, 120);
     const H = Math.max(container.clientHeight || 160, 100);
     const padL = 46, padR = 14, padT = 14, padB = 28;
-    const vals = points.map((p) => p.value);
-    let vmin = Math.min(...vals), vmax = Math.max(...vals);
+    // 循环求 min/max：Math.min(...大数组) 展开实参在数万点时可能栈溢出
+    let vmin = Infinity, vmax = -Infinity;
+    for (const p of points) {
+      const v = p.value;
+      if (v < vmin) vmin = v;
+      if (v > vmax) vmax = v;
+    }
     if (vmin === vmax) { vmin -= 1; vmax += 1; }
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const xOf = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
@@ -290,9 +321,10 @@ export function initHistoryPanel({ getDevices, apiBase, getSelectedDevice }) {
       `</svg>`;
   }
 
-  // 主图尺寸变化时按实际像素重绘（避免文字被拉伸变形）
+  // 主图尺寸变化时按实际像素重绘（面板开合/窗口缩放会改变容器尺寸，导致文字拉伸变形）
+  let _mainPoints = null;   // 最近一次主图数据，供 ResizeObserver 重绘
   if (typeof ResizeObserver !== "undefined") {
-    new ResizeObserver(() => { /* 主图在 refresh/自动刷新时重画，这里无需缓存 */ }).observe(elChart);
+    new ResizeObserver(() => { if (_mainPoints && _mainPoints.length) drawChart(elChart, _mainPoints); }).observe(elChart);
   }
 
   let autoTimer = null;

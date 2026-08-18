@@ -69,6 +69,10 @@ services:
       - explorer-db:/db
     depends_on:
       - influxdb3
+    # 跨平台兼容：Explorer UI 在用户浏览器运行，经 host.docker.internal 访问宿主 InfluxDB；
+    # Linux Docker Engine 默认不解析该主机名，需显式 host-gateway 映射（与 backend 服务一致）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - dt-net
     restart: unless-stopped

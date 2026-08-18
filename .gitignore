@@ -34,3 +34,7 @@ backend/scripts/
 # ===== 个人 / 备份文件（不入库）=====
 PORTFOLIO_TODO.md
 frontend/public/models/modelBackup/
+
+# ===== Plant Simulation 大模型文件（68MB 级二进制，禁止入库）=====
+simulation/models/*.spp
+simulation/models/*.spp.bak

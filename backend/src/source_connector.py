@@ -55,6 +55,11 @@ class SourceClient:
     def is_connected(self) -> bool:
         return self._connected and self.sock is not None
 
+    @property
+    def failures(self) -> int:
+        """连续连接失败计数（只读，供日志/状态展示，避免外部访问私有 _failures）"""
+        return self._failures
+
     def connect(self) -> socket.socket:
         """建立 TCP 连接，返回 socket 对象"""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

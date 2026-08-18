@@ -45,12 +45,26 @@ class WebSocketHandler:
             logger.info("Frontend disconnected! Total: %d", len(self._connections))
 
     async def broadcast(self, data: dict) -> None:
-        """向所有已连接的前端广播 JSON 消息"""
+        """向所有已连接的前端广播 JSON 消息。
+
+        发送失败的连接视为半开/死连接：剔除并关闭，避免永久累积
+        （否则广播 O(N) 膨胀且每次反复打 warning）。
+        """
         if not self._connections:
             return
         message = json.dumps(data, ensure_ascii=False)
-        tasks = [ws.send_text(message) for ws in list(self._connections)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in results:
+        conns = list(self._connections)
+        results = await asyncio.gather(
+            *(ws.send_text(message) for ws in conns), return_exceptions=True
+        )
+        failed = []
+        for ws, r in zip(conns, results):
             if isinstance(r, Exception):
-                logger.warning("Send to websocket failed: %s", r)
+                logger.warning("Send to websocket failed (%r), remove & close it", r)
+                self._connections.discard(ws)
+                failed.append(ws)
+        for ws in failed:
+            try:
+                await ws.close()
+            except Exception:  # noqa: BLE001 关闭失败不处理（连接已移除）
+                pass

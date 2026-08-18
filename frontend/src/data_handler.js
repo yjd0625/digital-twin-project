@@ -334,6 +334,9 @@ export class DataHandler {
       rot: part.rotation.clone(),
       scl: part.scale.clone(),
     };
+    // 旋转通道用四元数记录起止姿态，动画时 slerp 最短路径插值（见 updateAnimations）
+    const fromQ = part.quaternion.clone();
+    const toQ = part.quaternion.clone();
     // 各通道独立时长：仅当 target 中出现该通道才设置 dur（否则 0 = 不动画）
     // 优先级：通道 duration > 通道 speed（位移/速度，匀速）> command 级 duration（缺省 1.0s 并提示）
     const dur = { pos: 0, rot: 0, scl: 0 };
@@ -350,6 +353,7 @@ export class DataHandler {
       if (t.rotation.y !== undefined) to.rot.y = t.rotation.y;
       if (t.rotation.z !== undefined) to.rot.z = t.rotation.z;
       dur.rot = resolveChannelDur(t.rotation, eulerDist(from.rot, to.rot), fallback, "rotation", true);
+      toQ.setFromEuler(to.rot);
     }
     if (t.scale) {
       if (t.scale.x !== undefined) to.scl.x = t.scale.x;
@@ -359,7 +363,7 @@ export class DataHandler {
     }
     const key = cmd.id + "::" + cmd.part;
     this.activeAnimations.set(key, {
-      part, from, to,
+      part, from, to, fromQ, toQ,
       elapsed: { pos: 0, rot: 0, scl: 0 },
       dur,
     });
@@ -367,15 +371,17 @@ export class DataHandler {
 
   /** 每帧由 main.js 的 animate() 调用：推进所有活动动画（各通道独立时长）*/
   updateAnimations(delta) {
-    const speed = this.simulateSpeed || 1;
+    // 播放倍率：非法值回退 1；负值钳制为 0（暂停）——负倍速会让 elapsed 倒退、动画永不完成
+    let speed = this.simulateSpeed;
+    if (typeof speed !== "number" || !Number.isFinite(speed)) speed = 1;
+    speed = Math.max(speed, 0);
     for (const [key, a] of this.activeAnimations) {
       let allDone = true;
       const channels = [
         { name: "pos", apply: (t) => a.part.position.lerpVectors(a.from.pos, a.to.pos, t) },
         { name: "rot", apply: (t) => {
-            a.part.rotation.x = a.from.rot.x + (a.to.rot.x - a.from.rot.x) * t;
-            a.part.rotation.y = a.from.rot.y + (a.to.rot.y - a.from.rot.y) * t;
-            a.part.rotation.z = a.from.rot.z + (a.to.rot.z - a.from.rot.z) * t;
+            // 四元数 slerp 最短路径插值：避免欧拉角线性插值跨 π 时绕远路/万向锁抖动
+            a.part.quaternion.copy(a.fromQ).slerp(a.toQ, t);
           } },
         { name: "scl", apply: (t) => a.part.scale.lerpVectors(a.from.scl, a.to.scl, t) },
       ];

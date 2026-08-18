@@ -30,28 +30,6 @@
             pointer-events: none;
             z-index: 100;
         }
-        #controls {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            display: flex;
-            gap: 15px;
-        }
-        #controls button {
-            padding: 10px 25px;
-            font-size: 16px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.2s;
-        }
-        #controls button:hover { transform: scale(1.05); }
-        #btn-start { background: #4CAF50; color: white; }
-        #btn-stop  { background: #f44336; color: white; }
-        #btn-speed { background: #2196F3; color: white; }
         #toolbar {
             position: absolute; top: 20px; right: 20px; z-index: 100;
             display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
@@ -76,12 +54,6 @@
         <button id="btn-side">侧视</button>
         <button id="btn-default">默认视角</button>
         <button id="btn-history">历史数据</button>
-    </div>
-    <div id="controls">
-        <button id="btn-start">▶ 启动仿真</button>
-        <button id="btn-stop">⏸ 暂停仿真</button>
-        <button id="btn-speed">⚡ 加速</button>
-        
     </div>
     <script type="module" src="/src/main.js"></script>
 </body>

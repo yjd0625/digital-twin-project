@@ -158,10 +158,12 @@ export async function loadDXFModel(scene, url, options = {}) {
         for (let vi = 1; vi < ent.vertices.length; vi++) addSeg(ent.vertices[vi-1].x, ent.vertices[vi-1].y, ent.vertices[vi].x, ent.vertices[vi].y);
         if (ent.closed) { const v = ent.vertices; addSeg(v[v.length-1].x, v[v.length-1].y, v[0].x, v[0].y); }
       } else if (ent.type === "CIRCLE" && ent.center && ent.radius) {
-        for (let a = 0; a < 16; a++) { let a1 = (a/64)*Math.PI*2, a2 = ((a+1)/64)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
+        // 段数须与角度步进一致（16 段 /16 正好一圈；此前 /64 只画 1/4 圆）
+        for (let a = 0; a < 16; a++) { let a1 = (a/16)*Math.PI*2, a2 = ((a+1)/16)*Math.PI*2; addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
       } else if (ent.type === "ARC" && ent.center && ent.radius) {
         let sa = (ent.startAngle||0)*Math.PI/180, ea = (ent.endAngle||360)*Math.PI/180;
-        for (let i = 0; i < 12; i++) { let a1=sa+(ea-sa)*(i/32), a2=sa+(ea-sa)*((i+1)/32); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
+        // 12 段均匀覆盖整段弧（此前 /32 只画 3/8 弧）
+        for (let i = 0; i < 12; i++) { let a1=sa+(ea-sa)*(i/12), a2=sa+(ea-sa)*((i+1)/12); addSeg(ent.center.x+Math.cos(a1)*ent.radius, ent.center.y+Math.sin(a1)*ent.radius, ent.center.x+Math.cos(a2)*ent.radius, ent.center.y+Math.sin(a2)*ent.radius); }
       }
     } catch(e2) { console.warn("DXF entity parse error:", e2, ent); }
   });
