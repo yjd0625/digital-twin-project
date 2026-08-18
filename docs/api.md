@@ -52,8 +52,19 @@
 |------|------|------|
 | GET | /health | 健康检查：`{"status":"ok","source_connected":bool}` |
 | GET | /status | 运行状态：前端连接数 + 数据源(source) / 总线连接状态 + InfluxDB 写入统计（enabled/connected/write_count/last_error） |
+| GET | /api/state | 最近一次全量 state 快照（见下方） |
 | GET | /api/history | 历史时序查询（见下方）；依赖 `INFLUXDB_ENABLED=true`，否则 503 |
 | WS | /ws | 前端实时通道（见上方 WebSocket 接口） |
+
+### 状态快照 `GET /api/state`
+
+返回后端最近一次收到的 `state` 消息（部分覆盖语义的累积视角）；尚未收到任何 state 时返回 `{"state": null}`。
+
+前端在**模型加载完成后**调用一次，补偿「加载窗口内 WebSocket 消息被丢弃」导致的初始状态丢失（见 `frontend/src/main.js` 加载完成后的 fetch 逻辑）。
+
+```json
+{ "state": { "type": "state", "simulateSpeed": 1, "stations": [ ... ] } }
+```
 
 ### 历史时序查询 `GET /api/history`
 

@@ -6,6 +6,7 @@
 ![InfluxDB](https://img.shields.io/badge/InfluxDB-3%20Core-22ADF6?logo=influxdb&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-Frontend-000000?logo=threedotjs&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
 基于**可插拔数据源**的 3D 数字孪生系统：后端通过 TCP 接入数据源（默认随仓库的 Python 实时仿真器），经 Redis 消息总线转发，前端用 Three.js 实时渲染；时序数据可旁路存入 InfluxDB 3，用 InfluxDB3 Explorer 查看。
 
@@ -96,14 +97,15 @@ flowchart TB
 
 ### 方式二：原生命令行逐步启动（便于调试）
 
-每个组件独立命令，无脚本依赖；需本机装 Redis、Python（建议 conda `DT` 环境）、Node.js。
+每个组件独立命令，无脚本依赖；需本机装 Redis、Python（3.12，建议虚拟环境/conda）、Node.js。
 
 ```bash
 # 1) Redis（必选）
 docker run -d --name redis-twin --restart unless-stopped -p 6379:6379 redis:7-alpine
 
 # 2) 后端（FastAPI，必选；默认 0.0.0.0:8300）
-conda activate DT && cd backend && pip install -r requirements.txt && python -m src.main
+cd backend && python -m venv .venv && .venv/Scripts/activate  # Windows；macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt && python -m src.main
 
 # 3) 前端（Vite，必选）
 cd frontend && npm install && npm run dev   # http://localhost:5173
@@ -145,7 +147,7 @@ python -m connectors.examples.publish_demo --broker test.mosquitto.org --topic d
 - **聚焦查询**：选设备 → 选零件 → 选字段（如 `temp`/`pos_x`）→ 选时间范围 → 刷新（或勾「自动」每 10s 拉取）。
 - **📌 绑定选中设备**：在 3D 场景点选模型后点此按钮，自动把选中孪生体 id 填入设备下拉。
 - **＋ 加入看板**：把当前选择快照成卡片，看板区可并排多张，每张独立拉取 + 独立 SVG 图。
-- **后端接口**：`GET /api/history?device=&part=&field=&range=`（未启用返回 503，查询异常 502）。详见 `docs/api.md`。
+- **后端接口**：`GET /api/history?device=&part=&field=&range=`（未启用返回 503，查询异常 502）；`GET /api/state` 返回后端最近一次全量 state 快照（前端加载完成后拉取，补偿加载窗口丢失的初始状态）。详见 `docs/api.md`。
 
 ## 端口总览
 
@@ -186,3 +188,9 @@ pytest                                    # 或 poetry/conda 环境直接 pytest
 ## 文档
 
 - 接口：`docs/api.md` · 架构：`docs/architecture.md` · 部署：`docs/deployment.md`
+
+## License
+
+[MIT](LICENSE) © 2026 yjd0625
+
+> 第三方依赖：后端 `fastapi` / `uvicorn` / `redis-py` / `influxdb3-python` / `websockets`（MIT 类）；前端 `three.js` / `dxf-parser` / `vite`（MIT）；连接器 `paho-mqtt`（EPL-2.0 / EDL-1.0 双许可，仅作可插拔数据源依赖使用）。

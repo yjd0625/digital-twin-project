@@ -6,6 +6,8 @@ uvicorn[standard]~=0.29.0
 redis>=4.2
 # 时序数据库：InfluxDB 3 Core 专用客户端（注意导入名是 influxdb_client_3，由本包提供）
 influxdb3-python
+# 加载项目根 .env（backend/src/config.py 可选加载；缺失时回退环境变量，不阻塞启动）
+python-dotenv>=1.0
 
 # 开发 / 测试
 pytest~=8.0
